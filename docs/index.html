@@ -24,6 +24,34 @@
   --loss:      #8E3B35;
   --qualify:   #A97C2F;
   --shadow:    0 1px 2px rgba(16,33,31,.06), 0 4px 16px rgba(16,33,31,.05);
+  /* The scoreboard. It used to be one fixed dark look, on the grounds that
+   * "a scoreboard is dark in any room" - true of a board bolted to a wall,
+   * not of a phone held up in the sun, where white-on-black is the harder
+   * read and the phone cannot get bright enough to win the argument. It
+   * follows the device now, and the light board is NOT the dark one
+   * inverted: on white a team's colour runs at full strength, which it
+   * cannot do on black. */
+  --bd-bg:          #F7F5EF;
+  --bd-gutter:      #DDD8CC;
+  --bd-zone:        #FFFFFF;
+  --bd-zone-press:  #EDE8DC;
+  --bd-zone-serve:  #FBF9F3;
+  --bd-rule:        #DDD8CC;
+  --bd-ink:         #0E1A18;
+  --bd-ink-2:       #2A3B38;
+  --bd-ink-3:       #5A6E6B;
+  --bd-chip:        #FFFFFF;
+  --bd-chip-line:   #C9C2B2;
+  --bd-chip-hover:  #F0ECE2;
+  --bd-chip-press:  #E4DFD2;
+  --bd-tag:         #E4DFD2;
+  --bd-done:        #DFEDE8;
+  --bd-done-line:   #93B5AC;
+  --bd-banner:      #FFFFFF;
+  --bd-banner-line: #BFD3CC;
+  --bd-on-live:     #FFFFFF;
+  --bd-team:        #AFBEBB;
+  --bd-shadow:      rgba(16,33,31,.22);
 
   --f-ui: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --f-mono: 'DM Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -52,6 +80,27 @@
     --loss:      #D1736C;
     --qualify:   #D4A055;
     --shadow:    0 1px 2px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.3);
+    --bd-bg:          #07100F;
+    --bd-gutter:      #0E1A18;
+    --bd-zone:        #0B1716;
+    --bd-zone-press:  #1B2F2C;
+    --bd-zone-serve:  #0F1F1D;
+    --bd-rule:        #1A2B29;
+    --bd-ink:         #F2F7F5;
+    --bd-ink-2:       #BFD4D0;
+    --bd-ink-3:       #7A918D;
+    --bd-chip:        #162422;
+    --bd-chip-line:   #2A3F3B;
+    --bd-chip-hover:  #1E302D;
+    --bd-chip-press:  #2A3F3B;
+    --bd-tag:         #243734;
+    --bd-done:        #1C332F;
+    --bd-done-line:   #3C5A54;
+    --bd-banner:      #16302C;
+    --bd-banner-line: #27514A;
+    --bd-on-live:     #120703;
+    --bd-team:        #2B4441;
+    --bd-shadow:      rgba(0,0,0,.5);
     color-scheme: dark;
   }
 }
@@ -73,6 +122,27 @@
   --loss:      #D1736C;
   --qualify:   #D4A055;
   --shadow:    0 1px 2px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.3);
+  --bd-bg:          #07100F;
+  --bd-gutter:      #0E1A18;
+  --bd-zone:        #0B1716;
+  --bd-zone-press:  #1B2F2C;
+  --bd-zone-serve:  #0F1F1D;
+  --bd-rule:        #1A2B29;
+  --bd-ink:         #F2F7F5;
+  --bd-ink-2:       #BFD4D0;
+  --bd-ink-3:       #7A918D;
+  --bd-chip:        #162422;
+  --bd-chip-line:   #2A3F3B;
+  --bd-chip-hover:  #1E302D;
+  --bd-chip-press:  #2A3F3B;
+  --bd-tag:         #243734;
+  --bd-done:        #1C332F;
+  --bd-done-line:   #3C5A54;
+  --bd-banner:      #16302C;
+  --bd-banner-line: #27514A;
+  --bd-on-live:     #120703;
+  --bd-team:        #2B4441;
+  --bd-shadow:      rgba(0,0,0,.5);
   color-scheme: dark;
 }
 
@@ -298,10 +368,11 @@ table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
   white-space: nowrap; }
 
 /* ---------------------------------------------------------- scoreboard -- */
-/* Deliberately one look: a scoreboard is dark in any room. */
+/* Follows the device, like every other screen. The tokens and the
+   reason the old "dark in any room" rule was dropped are at the top. */
 .board {
   position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column;
-  background: #07100F; color: #F2F7F5;
+  background: var(--bd-bg); color: var(--bd-ink);
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   overscroll-behavior: contain;   /* no pull-to-refresh mid-game */
@@ -309,61 +380,61 @@ table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
 .board-top {
   display: flex; align-items: center; gap: var(--s3);
   padding: 8px max(12px, env(safe-area-inset-right,0px)) 8px max(12px, env(safe-area-inset-left,0px));
-  border-bottom: 1px solid #1A2B29; flex: none;
+  border-bottom: 1px solid var(--bd-rule); flex: none;
 }
-.board-top .bt-title { flex: 1; min-width: 0; font-size: 12.5px; color: #8CA5A1;
+.board-top .bt-title { flex: 1; min-width: 0; font-size: 12.5px; color: var(--bd-ink-3);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .board-top .bt-jump {
   flex: 1; min-width: 0; appearance: none; background: none; border: 0;
-  text-align: left; color: #8CA5A1; font-size: 12.5px; font-family: inherit;
+  text-align: left; color: var(--bd-ink-3); font-size: 12.5px; font-family: inherit;
   padding: 8px 4px; cursor: pointer;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.board-top .bt-jump b { color: #E6F0EE; font-weight: 800; font-size: 14px;
+.board-top .bt-jump b { color: var(--bd-ink); font-weight: 800; font-size: 14px;
   font-stretch: 112%; }
-.board-top .bt-jump:active { color: #CFE0DD; }
+.board-top .bt-jump:active { color: var(--bd-ink-2); }
 .board-btn {
-  appearance: none; background: #162422; border: 1px solid #243734; color: #CFE0DD;
+  appearance: none; background: var(--bd-chip); border: 1px solid var(--bd-chip-line); color: var(--bd-ink);
   border-radius: var(--r1); padding: 6px 11px; font-size: 12.5px; font-weight: 600;
   cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
 }
-.board-btn:hover { background: #1E302D; }
-.board-btn:active { background: #2A3F3B; }
+.board-btn:hover { background: var(--bd-chip-hover); }
+.board-btn:active { background: var(--bd-chip-press); }
 .btn:active { background: var(--surface-2); }
 .btn-primary:active { filter: brightness(.9); }
-.board-btn[aria-pressed="true"] { background: var(--live); border-color: var(--live); color: #120703; }
+.board-btn[aria-pressed="true"] { background: var(--live); border-color: var(--live); color: var(--bd-on-live); }
 
 .zones { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 3px;
-  min-height: 0; background: #0E1A18; }
+  min-height: 0; background: var(--bd-gutter); }
 .zone {
   appearance: none; border: 0; cursor: pointer; position: relative;
-  background: #0B1716; color: inherit; display: flex; flex-direction: column;
+  background: var(--bd-zone); color: inherit; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 2px; padding: var(--s4) var(--s2);
   min-width: 0; transition: background .08s;
-  border-top: 4px solid var(--team, #2B4441);
+  border-top: 4px solid var(--team, var(--bd-team));
 }
 /* The browser's own tap highlight is off, so this is the only confirmation
    a thumb gets. Make it unmissable. */
-.zone:active { background: #1B2F2C; box-shadow: inset 0 0 0 3px var(--team, #2B4441); }
-.zone.serving { background: #0F1F1D; }
+.zone:active { background: var(--bd-zone-press); box-shadow: inset 0 0 0 3px var(--team, var(--bd-team)); }
+.zone.serving { background: var(--bd-zone-serve); }
 .zone[disabled] { cursor: default; opacity: .55; }
 .zone .z-name {
-  font-size: clamp(12px, 3.4vw, 17px); font-weight: 700; color: #BFD4D0;
+  font-size: clamp(12px, 3.4vw, 17px); font-weight: 700; color: var(--bd-ink-2);
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   letter-spacing: .01em;
 }
-.zone .z-sub { font-size: clamp(10px, 2.6vw, 12.5px); color: #7A918D;
+.zone .z-sub { font-size: clamp(10px, 2.6vw, 12.5px); color: var(--bd-ink-3);
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .zone .z-players { display: flex; flex-direction: column; gap: 2px;
   align-items: center; max-width: 100%; }
 .zone .z-pl { display: flex; align-items: center; gap: 6px; max-width: 100%;
-  font-size: clamp(10px, 2.6vw, 12.5px); color: #7A918D;
+  font-size: clamp(10px, 2.6vw, 12.5px); color: var(--bd-ink-3);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.zone .z-pl.on { color: #F2F7F5; font-weight: 700; }
+.zone .z-pl.on { color: var(--bd-ink); font-weight: 700; }
 .zone .z-pl i { font-style: normal; font-size: 9.5px; letter-spacing: .07em;
   text-transform: uppercase; padding: 1px 5px; border-radius: 3px;
-  background: #243734; color: #9DB5B1; flex: none; }
-.zone .z-pl.on i { background: var(--live); color: #120703; }
+  background: var(--bd-tag); color: var(--bd-ink-3); flex: none; }
+.zone .z-pl.on i { background: var(--live); color: var(--bd-on-live); }
 .zone .z-score {
   font-stretch: 125%; font-weight: 900; line-height: .92;
   font-size: clamp(64px, 23vw, 168px); letter-spacing: -.03em;
@@ -376,7 +447,7 @@ table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
   text-transform: uppercase; color: var(--live); height: 14px; }
 .zone .z-games { display: flex; gap: 4px; height: 16px; align-items: center; }
 .zone .z-games i { font-style: normal; font-size: 11px; font-weight: 700;
-  color: #7A918D; font-family: var(--f-mono); }
+  color: var(--bd-ink-3); font-family: var(--f-mono); }
 
 /* Every control in one place along the bottom, centred, rather than one
    in each corner of the board. They are read and hit at arm's length by
@@ -387,9 +458,9 @@ table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
   gap: 8px;
   padding: 10px max(12px, env(safe-area-inset-right,0px))
            calc(10px + env(safe-area-inset-bottom,0px)) max(12px, env(safe-area-inset-left,0px));
-  border-top: 1px solid #1A2B29; background: #07100F;
+  border-top: 1px solid var(--bd-rule); background: var(--bd-bg);
 }
-.board-note { max-width: 100%; font-size: 12px; color: #7A918D; text-align: center;
+.board-note { max-width: 100%; font-size: 12px; color: var(--bd-ink-3); text-align: center;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .board-note-tap {
   background: none; border: 0; cursor: pointer; font: inherit; padding: 2px 0;
@@ -401,26 +472,26 @@ table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
 }
 .board-ctl {
   display: inline-flex; align-items: center; gap: 7px;
-  appearance: none; background: #162422; border: 1px solid #2A3F3B; color: #DFF0EC;
+  appearance: none; background: var(--bd-chip); border: 1px solid var(--bd-chip-line); color: var(--bd-ink);
   border-radius: var(--r1); padding: 10px 13px; font-size: 13.5px; font-weight: 600;
   font-family: inherit; cursor: pointer; min-height: 42px; white-space: nowrap;
 }
 .ctl-ico { font-size: 15px; line-height: 1; opacity: .8; }
-.board-ctl:hover { background: #1E302D; }
-.board-ctl:active { background: #2A3F3B; }
+.board-ctl:hover { background: var(--bd-chip-hover); }
+.board-ctl:active { background: var(--bd-chip-press); }
 .board-ctl:disabled { opacity: .4; cursor: default; }
 .board-ctl[aria-pressed="true"] { background: var(--live); border-color: var(--live);
-  color: #120703; }
+  color: var(--bd-on-live); }
 /* The one that leaves the board, so it is told apart from the rest. */
-.board-ctl-done { background: #1C332F; border-color: #3C5A54; }
+.board-ctl-done { background: var(--bd-done); border-color: var(--bd-done-line); }
 
 .board-banner {
   position: absolute; left: 50%; transform: translateX(-50%);
   bottom: calc(var(--foot, 86px) + 10px); z-index: 5;
-  background: #16302C; border: 1px solid #27514A; color: #DFF0EC;
+  background: var(--bd-banner); border: 1px solid var(--bd-banner-line); color: var(--bd-ink);
   border-radius: var(--r2); padding: 10px var(--s4); font-size: 13.5px;
   display: flex; align-items: center; gap: var(--s3); max-width: calc(100% - 24px);
-  box-shadow: 0 8px 28px rgba(0,0,0,.5);
+  box-shadow: 0 8px 28px var(--bd-shadow);
 }
 /* The banner floats over the lower score, so every extra line it wraps to
    is score the scorer cannot see. Buttons never wrap or shrink; the text
@@ -429,7 +500,7 @@ table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
 .board-banner .board-btn { flex: 0 0 auto; white-space: nowrap; }
 .board-banner b { display: block; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; }
-.bb-sub { font-size: 12px; color: #9DB5B1; }
+.bb-sub { font-size: 12px; color: var(--bd-ink-3); }
 .board-banner.bb-tall { flex-wrap: wrap; max-width: min(560px, calc(100% - 24px)); }
 /* Room for the tall prompt, so it stops covering the score it is asking
    about. Portrait stacks the sides, so only the lower one is in the way. */

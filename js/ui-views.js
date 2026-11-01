@@ -42,7 +42,11 @@
         S.pending ? U.banner(S.pending + ' change' + (S.pending > 1 ? 's' : '') +
           ' waiting for the connection. They are safe on this device.', 'warn') : null,
         S.loading ? el('p', { class: 'muted', text: 'Loading...' }) : list,
-        el('div', { class: 'row', style: 'margin-top:24px' }, [
+        el('div', { class: 'stack-s', style: 'margin-top:24px' }, [
+          el('div', { class: 'eyebrow', text: 'Appearance' }),
+          U.themePicker()
+        ]),
+        el('div', { class: 'row', style: 'margin-top:18px' }, [
           el('button', { class: 'btn btn-ghost btn-sm', text: 'Self test',
             onclick: function () { api.go('selftest'); } })
         ])
@@ -158,6 +162,13 @@
           onclick: function () { close(); TS.extras.dataSheet(S, api); } }),
         el('button', { class: 'btn btn-block', text: 'All tournaments',
           onclick: function () { close(); api.go('home'); } }),
+        el('div', { class: 'stack-s', style: 'margin-top:10px' }, [
+          el('div', { class: 'eyebrow', text: 'Appearance' }),
+          U.themePicker(),
+          el('p', { class: 'tiny muted', text:
+            'Automatic follows this phone. Kept on this device, so two ' +
+            'scorers at one match can choose differently.' })
+        ]),
         el('p', { class: 'tiny muted', style: 'margin-top:8px', text:
           TS.store.mode() === 'cloud'
             ? 'Shared live. Anyone with the link at Contributor level can score; Viewers watch only.'

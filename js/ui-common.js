@@ -491,6 +491,66 @@
     return Promise.resolve(false);
   }
 
+  /* ------------------------------------------------------------- theme -- */
+
+  /* Light or dark follows the phone unless someone has said otherwise, so
+   * what is stored is a CHOICE and not a colour: 'auto' is the absence of
+   * an override and is stored as nothing at all. The CSS already does the
+   * rest - `:root` is the light set, the media query hands dark to anyone
+   * who has not forced light, and [data-theme="dark"] forces it the other
+   * way - so setting one attribute is the whole mechanism. That hook has
+   * been in the stylesheet since the beginning with nothing wired to it.
+   *
+   * Per device, like the board's side swap, and for the same reason: two
+   * people scoring one match from opposite ends of a court, one in the sun
+   * and one in the shade, want different answers. */
+  var THEME_KEY = 'ts1:theme';
+
+  function theme() {
+    try {
+      var v = window.localStorage.getItem(THEME_KEY);
+      return (v === 'light' || v === 'dark') ? v : 'auto';
+    } catch (e) { return 'auto'; }
+  }
+
+  function applyTheme() {
+    var v = theme();
+    var root = window.document.documentElement;
+    if (v === 'auto') root.removeAttribute('data-theme');
+    else root.setAttribute('data-theme', v);
+    return v;
+  }
+
+  function setTheme(v) {
+    try {
+      if (v === 'auto') window.localStorage.removeItem(THEME_KEY);
+      else window.localStorage.setItem(THEME_KEY, v);
+    } catch (e) { /* private window; the choice lasts this session */ }
+    return applyTheme();
+  }
+
+  /* Repaints itself rather than asking for a render: the colours change in
+   * CSS the moment the attribute does, and this may be sitting inside a
+   * sheet, which render() deliberately leaves alone. */
+  function themePicker() {
+    var row = el('div', { class: 'row', role: 'group', 'aria-label': 'Appearance' });
+    var opts = [['auto', 'Automatic'], ['light', 'Light'], ['dark', 'Dark']];
+    function paint() {
+      var now = theme();
+      mount(row, opts.map(function (o) {
+        return el('button', {
+          class: 'btn btn-sm' + (now === o[0] ? ' btn-primary' : ''),
+          type: 'button', text: o[1], 'aria-pressed': String(now === o[0]),
+          onclick: function () { setTheme(o[0]); paint(); }
+        });
+      }));
+    }
+    paint();
+    return row;
+  }
+
+  applyTheme();
+
   TS.ui = {
     esc: esc, el: el, clear: clear, mount: mount,
     sheet: sheet, closeSheet: closeSheet, confirmSheet: confirmSheet, toast: toast,
@@ -504,6 +564,8 @@
     gameScoring: gameScoring, scoringOverrideFor: scoringOverrideFor,
     gameScoringOf: gameScoringOf,
     colorFor: colorFor, PALETTE: PALETTE,
+    theme: theme, setTheme: setTheme, applyTheme: applyTheme,
+    themePicker: themePicker,
     download: download, copyText: copyText
   };
 

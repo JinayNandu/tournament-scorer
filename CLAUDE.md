@@ -382,6 +382,34 @@ sheet has plus/minus steppers per side per set (Undo only ever reaches the
 *last* point, which is not always the wrong one), a one-tap route to the
 serve rotation, the side swap, and the lineup.
 
+## Light and dark follow the device
+
+`:root` is the light set, a media query hands dark to anyone who has not
+forced light, and `[data-theme="dark"]` forces it the other way. That hook
+sat in the stylesheet from the very beginning with nothing wired to it.
+`U.themePicker` is wired to it now, and `U.applyTheme` runs at ui-common
+load rather than at boot, so the attribute is set before anything paints.
+
+**What is stored is a CHOICE, not a colour.** `auto` is the absence of an
+override and is stored as nothing at all, so a phone that turns dark at
+sunset takes the app with it. It is kept per device, like the board's side
+swap and for the same reason: two people scoring one match from opposite
+ends of a court, one in the sun and one in the shade, want different
+answers.
+
+**The board follows too, and that IS a reversal.** It used to be one fixed
+dark look, on the stated grounds that "a scoreboard is dark in any room" -
+true of a board bolted to a wall, false of a phone held up in daylight,
+where white-on-black is the harder read and the phone cannot get bright
+enough to win the argument. Its twenty-one colours are `--bd-*` tokens now,
+defined in all three theme blocks. Nothing in the board's CSS may be a
+literal hex again, or half the board stops following and nobody notices
+until somebody is standing in the sun.
+
+**The light board is not the dark one inverted.** On white a team's colour
+runs at full strength behind white text, which it cannot do on black, so
+the light board carries MORE colour rather than less.
+
 ## Do not gate the scoreboard
 
 Twice now a well-meaning setup step has read as a bug. A full-screen "who
@@ -664,6 +692,7 @@ wizard (five steps: numbers, categories, teams, groups, format);
 score mode for every engine; the tie sheet; per-match line-ups;
 a points target per game;
 hosting as a plain static site, with an open shared backend behind it;
+light and dark following the device, the scoreboard included;
 group tables; the stage builder (Super N with four carry-over rules, and
 seeded knockouts with byes); the bracket view; table locking with a
 divergence warning; the player leaderboard; the result feed; big-screen
