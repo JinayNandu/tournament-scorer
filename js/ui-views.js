@@ -30,6 +30,11 @@
           onclick: function () { S.wizard = null; api.go('wizard'); } }) : null
       ]),
       el('div', { class: 'wrap stack' }, [
+        S.info.sharedFailed ? U.banner(
+          'The shared backend is set up but did not answer, so scores are ' +
+          'being saved on this device only and nobody else can see them. ' +
+          'Check the Firebase config and that the rules are published.',
+          'bad') :
         S.info.mode === 'local' ? U.banner(S.info.runtime
           ? 'Saved on this device only. Sign in to claude.ai on the shared link to score from several phones at once.'
           : 'Saved on this device only. Nothing leaves this phone, and anyone else opening this link starts an empty one of their own.',

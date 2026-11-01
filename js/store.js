@@ -38,6 +38,10 @@
   /* Which of the three is answering: the open shared backend, the
    * artifact's own db, or nothing but this device. */
   var backend = 'device';
+  /* Configured, and still no answer. Falling back to the device is the
+   * right thing to do; doing it SILENTLY is how an organiser discovers at
+   * the tournament that none of the other phones can see the scores. */
+  var sharedFailed = false;
   var db = null;
   var user = null;
   var userId = null;
@@ -157,7 +161,10 @@
    * be the one person who could not see what the scorers were doing. */
   function openShared() {
     if (!TS.firestore || !TS.firestore.configured()) return Promise.resolve(null);
-    return TS.firestore.connect();
+    return TS.firestore.connect().then(function (shared) {
+      if (!shared) sharedFailed = true;   // a wrong key, a blocked CDN
+      return shared;
+    });
   }
 
   function openArtifact() {
@@ -198,7 +205,8 @@
 
   function info() {
     return { mode: mode, backend: backend, runtime: runtime,
-             canWrite: canWrite, userId: userId, clientId: clientId() };
+             sharedFailed: sharedFailed, canWrite: canWrite,
+             userId: userId, clientId: clientId() };
   }
 
   var _clientId = null;
