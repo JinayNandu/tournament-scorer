@@ -372,20 +372,32 @@ table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
 .fx-meta { display: flex; gap: var(--s2); align-items: center; grid-column: 1/-1;
   margin-top: 2px; }
 
+/* One game of a match. Square on the coloured edge, like the feed. */
 .rb {
   display: grid; grid-template-columns: 44px 1fr auto; align-items: center;
   gap: var(--s3); width: 100%; text-align: left; cursor: pointer;
   background: var(--surface); border: 1px solid var(--rule);
-  border-radius: var(--r2); padding: 10px var(--s3);
+  border-left: 4px solid var(--side, var(--rule-2));
+  border-radius: 0 var(--r2) var(--r2) 0; padding: 10px var(--s3);
 }
+/* The two teams of a match, above its games. */
+.mh-side { flex: 1; min-width: 0; font-weight: 800; font-size: 15px; }
+.mh-side.r { text-align: right; padding-right: 10px;
+  border-right: 4px solid var(--side, var(--rule-2)); }
+.mh-side:not(.r) { padding-left: 10px;
+  border-left: 4px solid var(--side, var(--rule-2)); }
+.mh-score { font-stretch: 125%; font-weight: 900; font-size: 30px; line-height: 1;
+  font-variant-numeric: tabular-nums; padding: 0 16px; }
+.mh-note { text-align: center; margin-top: 9px; font-size: 10px; font-weight: 700;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
 .rb:hover { border-color: var(--court); }
 .rb .lbl { font-family: var(--f-mono); font-size: 12px; font-weight: 500;
   color: var(--ink-2); background: var(--surface-2); border-radius: var(--r1);
   padding: 3px 0; text-align: center; }
 .rb .names { min-width: 0; font-size: 13px; line-height: 1.35; }
 .rb .names .vs { color: var(--ink-3); font-size: 11px; }
-.rb .rsc { font-stretch: 115%; font-weight: 800; font-size: 15px; text-align: right;
-  white-space: nowrap; }
+.rb .rsc { font-stretch: 118%; font-weight: 900; font-size: 16px;
+  font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 
 /* ---------------------------------------------------------- scoreboard -- */
 /* Follows the device, like every other screen. The tokens and the

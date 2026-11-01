@@ -734,14 +734,12 @@
 
     var head = el('div', { class: 'card' }, [
       el('div', { class: 'row' }, [
-        el('div', { style: 'flex:1;text-align:right;font-weight:700',
-                    text: api.entrantName(sides.home) }),
-        el('div', { style: 'font-stretch:118%;font-weight:800;font-size:26px;padding:0 14px',
+        headSide(S, api, sides.home, true),
+        el('div', { class: 'mh-score',
                     text: count > 1 ? tally.home + ' - ' + tally.away : 'v' }),
-        el('div', { style: 'flex:1;font-weight:700', text: api.entrantName(sides.away) })
+        headSide(S, api, sides.away, false)
       ]),
-      count > 1 ? el('p', { class: 'tiny muted', style: 'text-align:center;margin-top:6px',
-                            text: 'Games won' }) : null
+      count > 1 ? el('p', { class: 'mh-note', text: 'Games won' }) : null
     ]);
 
     var body = [head];
@@ -784,6 +782,17 @@
     ]);
   }
 
+  /* The same edge the feed and the board use, so one team looks like
+   * itself everywhere it appears. */
+  function headSide(S, api, eid, right) {
+    var e = eid && S.entrantsById[eid];
+    return el('div', {
+      class: 'mh-side' + (right ? ' r' : ''),
+      style: e && e.color ? '--side:' + e.color : null,
+      text: api.entrantName(eid)
+    });
+  }
+
   function matchRow(S, api, f, r, count) {
     var sum = (f.rubberSummary || {})[r.id] || r.summary;
     var hn = U.playerNames(r.homePlayers, S.playersById, { short: true });
@@ -798,9 +807,20 @@
           : el('div', { class: 'tiny muted', style: 'text-align:right',
               text: count > 1 ? 'Tap to score' : 'Tap to start' }));
 
+    /* Eleven of these in a column is the format this app is for, and they
+     * were eleven identical rows. The edge is the colour of whoever won
+     * that game, so the column itself says how the match is going. */
+    var won = sum && sum.complete && sum.winner
+      && S.entrantsById[api.sidesOf(f.id)[sum.winner]];
+    /* A game in play is not the same as one nobody has started, and a
+     * grey edge said it was. */
+    var edge = (won && won.color) ||
+      (sum && sum.rallies && !sum.complete ? 'var(--live)' : null);
+
     return el('div', { style: 'display:flex;align-items:stretch;gap:6px' }, [
       el('button', {
-        class: 'rb', type: 'button', style: 'flex:1',
+        class: 'rb', type: 'button',
+        style: 'flex:1' + (edge ? ';--side:' + edge : ''),
         onclick: function () { api.go('score', { rid: r.id, fid: f.id }); }
       }, [
         el('div', { class: 'lbl', text: count > 1 ? r.label : 'Score' }),
