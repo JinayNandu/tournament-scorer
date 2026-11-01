@@ -491,7 +491,7 @@
 
   function tableTab(S, api) {
     if (!S.resolved || !S.fixtures.length) {
-      return U.empty('No table yet', 'It fills in as matches are played.');
+      return U.empty('Standings', 'The table fills in as matches are played.');
     }
     var out = [];
     (S.tournament.stages || []).forEach(function (stage) {
@@ -501,7 +501,7 @@
         out.push(standingsTable(S, api, stage, g, byGroup[gid]));
       });
     });
-    if (!out.length) return U.empty('No table yet', 'It fills in as matches are played.');
+    if (!out.length) return U.empty('Standings', 'The table fills in as matches are played.');
     return el('div', { class: 'stack' }, out);
   }
 

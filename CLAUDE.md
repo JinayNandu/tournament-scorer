@@ -441,6 +441,15 @@ colours, across its top (`teamBand`). Nothing there is decorative: every
 stripe is a team that exists, so the twelve-team tournament is obvious in
 a list without reading a word of it.
 
+A result in the feed carries the WINNER's colour on its left edge, so a
+run of results shows who has been winning without being read. The edge is
+square where it meets that border (`border-radius: 0 r r 0`) - a radius on
+one side of a single-sided border only ever looks like a mistake.
+
+A team's badge in a list is the same white-on-their-colour the scoreboard
+puts behind a name. One treatment, both themes, for the same reason the
+chip works: every colour in `PALETTE` clears 4.5:1 against white.
+
 **Big screen is sized off the viewport, not the phone.** It is projected
 and read from the far side of a hall by people who are not holding it, so
 `.bs-*` scales with `clamp(..vw..)` rather than sitting at phone sizes,
@@ -462,6 +471,10 @@ racket sport shares. Do not make it sport-specific there; nothing outside
 The words changed with it. "Nothing on yet" is an apology for a screen
 being empty; the screen is empty because the organiser has not started
 yet, so it invites them to.
+
+The same went for the others. An empty state names its space and says
+when it fills - "Standings / The table fills in as matches are played" -
+rather than opening with what is missing.
 
 ## The match strip
 

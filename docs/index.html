@@ -316,8 +316,9 @@ a { color: var(--court); }
 .banner-warn { border-left-color: var(--live); }
 .banner-bad { border-left-color: var(--loss); }
 
-.empty { text-align: center; padding: var(--s6) var(--s4); }
-.empty h2 { margin-bottom: var(--s2); }
+.empty { text-align: center; padding: var(--s7) var(--s4); }
+.empty h2 { margin-bottom: var(--s2); font-stretch: 112%; }
+.empty p { max-width: 34ch; margin-inline: auto; }
 
 /* ------------------------------------------------------------- tables -- */
 .tablewrap { overflow-x: auto; border: 1px solid var(--rule);
@@ -655,6 +656,28 @@ table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
 .bs-court { text-align: center; margin-top: 10px; font-size: 11px;
   font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
   color: var(--ink-3); }
+
+/* A team in a list: the badge is the same white-on-their-colour the
+   scoreboard puts behind a name. */
+.tbadge { width: 36px; height: 36px; border-radius: 10px; flex: none;
+  display: grid; place-items: center; color: #fff; background: var(--rule-2);
+  font-size: 12px; font-weight: 900; font-stretch: 112%; letter-spacing: .06em; }
+.tr-name { font-weight: 800; font-size: 15px; }
+.tr-meta { margin-top: 3px; font-size: 10px; font-weight: 700;
+  letter-spacing: .13em; text-transform: uppercase; color: var(--ink-3); }
+.tr-go { font-size: 10px; font-weight: 700; letter-spacing: .13em;
+  text-transform: uppercase; color: var(--ink-3); }
+
+/* A result in the feed. Square on the coloured edge: a radius on one side
+   of a single-sided border only ever looks like a mistake. */
+.feedrow { display: flex; align-items: flex-start; gap: var(--s3);
+  background: var(--surface); border: 1px solid var(--rule);
+  border-left: 4px solid var(--side, var(--rule-2));
+  border-radius: 0 var(--r2) var(--r2) 0; padding: 11px 14px; }
+.fr-teams { font-weight: 700; font-size: 14px; }
+.fr-meta { margin-top: 3px; font-size: 12.5px; color: var(--ink-2); }
+.fr-line { font-weight: 800; font-variant-numeric: tabular-nums;
+  font-stretch: 112%; color: var(--ink); }
 
 /* A tournament card wears its own teams across the top. */
 .tcard {

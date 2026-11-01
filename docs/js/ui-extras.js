@@ -154,29 +154,34 @@
   function timeline(S, api) {
     var items = feedItems(S, api);
     if (!items.length) {
-      return U.empty('Nothing played yet', 'Results appear here as they come in, newest first.');
+      return U.empty('Results', 'They appear here as they come in, newest first.');
     }
     return el('div', { class: 'stack-s' }, items.slice(0, 120).map(function (it) {
       var sides = api.sidesOf(it.fixture.id);
       var s = it.s;
       var winnerName = s.winner ? api.entrantName(sides[s.winner]) : null;
       var players = (s.winner === 'away' ? s.awayPlayers : s.homePlayers) || [];
-      return el('div', { class: 'row', style:
-        'border:1px solid var(--rule);border-radius:10px;padding:10px 14px;' +
-        'background:var(--surface);align-items:flex-start' }, [
+      /* A flat list of results is hard to read down. The edge is the
+       * winner's colour - the one their half of the board wore - so a run
+       * of them shows at a glance who has been winning. */
+      var wonBy = s.winner && sides[s.winner];
+      var wonColour = wonBy && (S.entrantsById[wonBy] || {}).color;
+      return el('div', { class: 'feedrow',
+                         style: wonColour ? '--side:' + wonColour : null }, [
         el('div', { style: 'flex:1;min-width:0' }, [
-          el('div', { style: 'font-weight:600' }, [
+          el('div', { class: 'fr-teams' }, [
             el('span', { text: api.entrantName(sides.home) }),
             el('span', { class: 'muted', text: '  v  ' }),
             el('span', { text: api.entrantName(sides.away) })
           ]),
-          el('div', { class: 'small muted', text:
-            (s.label ? s.label + '  ·  ' : '') +
-            (s.complete
-              ? (winnerName ? winnerName + ' won ' + s.line : 'drawn ' + s.line)
-              : 'in play ' + s.line) +
-            (players.length ? '  ·  ' +
-              U.playerNames(players, S.playersById, { short: true }) : '') })
+          el('div', { class: 'fr-meta' }, [
+            s.label ? el('span', { text: s.label + '  ·  ' }) : null,
+            el('span', { text: s.complete
+              ? (winnerName ? winnerName + ' won ' : 'drawn ') : 'in play ' }),
+            el('b', { class: 'fr-line', text: s.line }),
+            players.length ? el('span', { text: '  ·  ' +
+              U.playerNames(players, S.playersById, { short: true }) }) : null
+          ])
         ]),
         s.complete ? U.pill('Final', 'done') : U.pill('Live', 'live')
       ]);

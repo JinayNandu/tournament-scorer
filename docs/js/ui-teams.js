@@ -25,12 +25,12 @@
         }, [
           badge(e),
           el('div', { style: 'min-width:0' }, [
-            el('div', { style: 'font-weight:700', text: e.name }),
-            el('div', { class: 'tiny muted', text: players
+            el('div', { class: 'tr-name', text: e.name }),
+            el('div', { class: 'tr-meta', text: players
               ? players + (players === 1 ? ' player' : ' players')
               : 'no players yet' })
           ]),
-          el('span', { class: 'tiny muted', text: 'Edit' })
+          el('span', { class: 'tr-go', text: 'Edit' })
         ]);
       })),
       el('div', { class: 'row' }, [
@@ -67,12 +67,14 @@
     ]);
   }
 
+  /* The same white-on-the-team's-colour the scoreboard puts behind a name,
+   * at list size. Every colour in PALETTE clears 4.5:1 against white, which
+   * is what lets this be one treatment rather than a light and a dark one. */
   function badge(e) {
     var label = e.logo || e.shortName || M.shortLabel(e.name);
     return el('span', {
-      style: 'width:34px;height:34px;border-radius:9px;flex:none;' +
-             'display:grid;place-items:center;font-size:13px;font-weight:800;' +
-             'color:#fff;background:' + (e.color || 'var(--rule-2)'),
+      class: 'tbadge',
+      style: e.color ? 'background:' + e.color : null,
       text: String(label).slice(0, 3)
     });
   }
