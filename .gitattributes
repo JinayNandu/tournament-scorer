@@ -1,0 +1,9 @@
+# Everything is text, stored and checked out as LF.
+#
+# Without this, Windows checks these files out with CRLF while the
+# repository holds LF, and `git status` reports files as modified that
+# have no change in them. Worse for this project: tools/mkpages.pl builds
+# docs/index.html by concatenating tools/head.html (no terminator) onto
+# index.html (CRLF), so the published page came out with mixed endings
+# depending on which machine last ran the build.
+* text=auto eol=lf
