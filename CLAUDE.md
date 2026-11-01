@@ -436,6 +436,33 @@ A match row now carries both teams' colours as edges on the two names,
 the same colours the board washes with, so a row and its scoreboard read
 as the same match.
 
+A tournament card on the home list wears one stripe per team, in their
+colours, across its top (`teamBand`). Nothing there is decorative: every
+stripe is a team that exists, so the twelve-team tournament is obvious in
+a list without reading a word of it.
+
+**Big screen is sized off the viewport, not the phone.** It is projected
+and read from the far side of a hall by people who are not holding it, so
+`.bs-*` scales with `clamp(..vw..)` rather than sitting at phone sizes,
+and the live cards carry the same team colours as everything else.
+
+## The empty screen is the first thing anyone sees
+
+It was three lines of grey text. `courtMark` draws a court in plan -
+built as SVG rather than fetched, so it weighs nothing, stays sharp at
+any size, recolours with the theme because it is stroked in
+`currentColor`, and cannot go missing on hall wifi the way an image can.
+It lies across the page rather than up it, because a card has width to
+spare and no height to spare.
+
+No sport has been chosen at that point, so the marking is the one every
+racket sport shares. Do not make it sport-specific there; nothing outside
+`engines.js` knows what sport anything is.
+
+The words changed with it. "Nothing on yet" is an apology for a screen
+being empty; the screen is empty because the organiser has not started
+yet, so it invites them to.
+
 ## The match strip
 
 One cell per game of a match, in order, filled with the colour of whoever
@@ -736,6 +763,8 @@ a points target per game;
 hosting as a plain static site, with an open shared backend behind it;
 light and dark following the device, the scoreboard included;
 the team's colour carrying the board, and the match strip;
+tournament cards that wear their teams, and a drawn court on the
+empty screen;
 group tables; the stage builder (Super N with four carry-over rules, and
 seeded knockouts with byes); the bracket view; table locking with a
 divergence warning; the player leaderboard; the result feed; big-screen

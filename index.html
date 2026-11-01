@@ -637,6 +637,49 @@ table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
 .step.on i { background: var(--court); border-color: var(--court); color: var(--court-ink); }
 .step.done i { background: var(--court-soft); border-color: var(--court-soft); color: var(--court); }
 
+/* Big screen: projected, and read by people across a hall rather than
+   holding it, so everything scales off the viewport instead of sitting
+   at a phone's size. */
+.bs-title { font-size: clamp(30px, 4vw, 58px); font-weight: 900;
+  font-stretch: 118%; letter-spacing: -.02em; line-height: 1; }
+.bs-live { padding: 18px 16px; }
+.bs-side { flex: 1; min-width: 0; font-weight: 800;
+  font-size: clamp(15px, 1.6vw, 22px); }
+.bs-side.r { text-align: right; padding-right: 10px;
+  border-right: 4px solid var(--side, var(--rule-2)); }
+.bs-side:not(.r) { padding-left: 10px;
+  border-left: 4px solid var(--side, var(--rule-2)); }
+.bs-score { font-stretch: 125%; font-weight: 900; line-height: 1;
+  font-variant-numeric: tabular-nums; padding: 0 16px;
+  font-size: clamp(28px, 3.4vw, 52px); }
+.bs-court { text-align: center; margin-top: 10px; font-size: 11px;
+  font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--ink-3); }
+
+/* A tournament card wears its own teams across the top. */
+.tcard {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: var(--r2); padding: 0; overflow: hidden;
+}
+.tcard:hover { border-color: var(--rule-2); }
+.tcard:active { background: var(--surface-2); }
+.tband { display: flex; height: 5px; }
+.tband i { flex: 1 1 0; min-width: 0; }
+.tbody { padding: var(--s4); }
+.tname { display: block; font-size: 17px; font-weight: 900;
+  font-stretch: 118%; letter-spacing: -.01em; }
+.tmeta { display: block; margin-top: 5px; font-size: 10.5px; font-weight: 700;
+  letter-spacing: .13em; text-transform: uppercase; color: var(--ink-3); }
+
+/* The court on the empty screen. Stroked in currentColor so it follows
+   the theme, and held well back - it is a watermark, not a picture. */
+.welcome { padding-top: var(--s5); }
+.courtmark { display: block; width: 132px; height: auto; margin: 0 auto var(--s4);
+  color: var(--ink); opacity: .2; }
+.courtmark rect, .courtmark line { fill: none; stroke: currentColor;
+  stroke-width: 3; stroke-linecap: square; }
+
 .preset {
   display: block; width: 100%; text-align: left; cursor: pointer;
   background: var(--surface); border: 1px solid var(--rule);

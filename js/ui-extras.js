@@ -217,7 +217,7 @@
 
       U.mount(host, el('div', { style: 'max-width:1400px;margin:0 auto' }, [
         el('div', { class: 'row', style: 'margin-bottom:20px' }, [
-          el('h1', { style: 'font-size:28px', text: S.tournament.name }),
+          el('h1', { class: 'bs-title', text: S.tournament.name }),
           el('div', { class: 'spacer' }),
           el('button', { class: 'btn', text: 'Close', onclick: close })
         ]),
@@ -251,19 +251,28 @@
     U.mount(document.getElementById('overlay'), host);
   }
 
+  /* This one is read from the far side of a hall, off a projector, by
+   * people who are not holding it. Everything here is sized off the
+   * viewport rather than fixed, and both teams carry the same colour the
+   * board washes their half with. */
   function liveCard(S, api, f) {
     var sides = api.sidesOf(f.id);
     var tally = TS.views.liveTally(f, f.matchCount == null ? 1 : f.matchCount);
-    return el('div', { class: 'card', style: 'padding:14px' }, [
+    function side(eid, right) {
+      var e = eid && S.entrantsById[eid];
+      return el('div', {
+        class: 'bs-side' + (right ? ' r' : ''),
+        style: e && e.color ? '--side:' + e.color : null,
+        text: api.entrantName(eid)
+      });
+    }
+    return el('div', { class: 'card bs-live' }, [
       el('div', { class: 'row' }, [
-        el('div', { style: 'flex:1;text-align:right;font-weight:700',
-          text: api.entrantName(sides.home) }),
-        el('div', { style: 'font-stretch:118%;font-weight:800;font-size:24px;padding:0 12px',
-          text: tally.home + ' - ' + tally.away }),
-        el('div', { style: 'flex:1;font-weight:700', text: api.entrantName(sides.away) })
+        side(sides.home, true),
+        el('div', { class: 'bs-score', text: tally.home + ' - ' + tally.away }),
+        side(sides.away, false)
       ]),
-      f.court ? el('div', { class: 'tiny muted', style: 'text-align:center',
-        text: 'Court ' + f.court }) : null
+      f.court ? el('div', { class: 'bs-court', text: 'Court ' + f.court }) : null
     ]);
   }
 

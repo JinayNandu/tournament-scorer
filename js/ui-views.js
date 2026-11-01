@@ -15,10 +15,12 @@
       ? el('div', { class: 'stack-s' }, S.tournaments.map(function (t) {
           return tournamentRow(t, S, api);
         }))
-      : el('div', { class: 'card stack', style: 'text-align:center' }, [
-          el('h2', { text: 'Nothing on yet' }),
+      : el('div', { class: 'card stack welcome', style: 'text-align:center' }, [
+          courtMark(),
+          el('h2', { text: 'Start a tournament' }),
           el('p', { class: 'muted', text:
-            'Start one with just a name. Teams and matches come after.' }),
+            'A name is all it needs. Teams, players and the games in a ' +
+            'match can come later, or in the middle of one.' }),
           el('button', { class: 'btn btn-primary btn-lg', text: 'New tournament',
             onclick: function () { S.wizard = null; api.go('wizard'); } })
         ]);
@@ -58,19 +60,67 @@
     return S.info.mode === 'cloud' ? 'Shared live' : 'This device only';
   }
 
+  /* A tournament's own teams are the only identity it has, so the card
+   * wears them: one stripe per team, in their colours, across the top.
+   * Nothing is decorative about it - every stripe is a team that exists,
+   * so a glance at the list says which tournament is the twelve-team one
+   * without reading a word. */
+  function teamBand(t) {
+    var cols = (t.entrants || []).map(function (e) { return e.color; })
+      .filter(function (c) { return !!c; });
+    if (!cols.length) return null;
+    return el('div', { class: 'tband' }, cols.map(function (c) {
+      return el('i', { style: 'background:' + c });
+    }));
+  }
+
+  /* The one screen with nothing on it is the first thing anybody sees, and
+   * it was three lines of grey text. A court in plan, drawn rather than
+   * fetched: it weighs nothing, it is sharp at any size, it recolours with
+   * the theme because it is stroked in currentColor, and it cannot go
+   * missing on hall wifi the way an image can. No sport has been chosen at
+   * this point, so the marking is the one every racket sport shares. */
+  function courtMark() {
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 220 100');
+    svg.setAttribute('class', 'courtmark');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    /* Lying across rather than up the page: a card has width to spare and
+     * no height to spare. Net down the middle, the non-volley line either
+     * side of it, and the service boxes split behind those. */
+    [['rect', { x: 2, y: 2, width: 216, height: 96, rx: 1 }],
+     ['line', { x1: 110, y1: 2, x2: 110, y2: 98 }],
+     ['line', { x1: 75,  y1: 2, x2: 75,  y2: 98 }],
+     ['line', { x1: 145, y1: 2, x2: 145, y2: 98 }],
+     ['line', { x1: 2,   y1: 50, x2: 75,  y2: 50 }],
+     ['line', { x1: 145, y1: 50, x2: 218, y2: 50 }]
+    ].forEach(function (p) {
+      var n = document.createElementNS(ns, p[0]);
+      Object.keys(p[1]).forEach(function (k) { n.setAttribute(k, p[1][k]); });
+      svg.appendChild(n);
+    });
+    return svg;
+  }
+
   function tournamentRow(t, S, api) {
     var teams = (t.entrants || []).length;
+    var meta = teams ? teams + (teams === 1 ? ' team' : ' teams')
+                     : 'tap to set up';
+    if (t.sport) meta = t.sport + '  ·  ' + meta;
     return el('button', {
-      class: 'preset', type: 'button',
+      class: 'tcard', type: 'button',
       onclick: function () {
         S.stageId = null;
         api.go('hub', { tid: t.id, tab: teams ? 'matches' : 'teams' });
       }
     }, [
-      el('b', { text: t.name }),
-      el('span', { text: teams
-        ? teams + ' teams'
-        : 'no teams yet — tap to set up' })
+      teamBand(t),
+      el('div', { class: 'tbody' }, [
+        el('b', { class: 'tname', text: t.name }),
+        el('span', { class: 'tmeta', text: meta })
+      ])
     ]);
   }
 
