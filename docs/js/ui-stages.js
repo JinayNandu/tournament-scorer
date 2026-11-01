@@ -582,24 +582,26 @@
   function bracketMatch(S, api, f) {
     var res = S.resolved && S.resolved.resultsById[f.id];
     var nums = TS.matches.sideScores(S, f, res);
+    /* A side that has not resolved yet is a placeholder - "Winner of
+     * Group B" - and has no team, so no colour. Those are the rows a
+     * bracket is mostly made of before it is played. */
     function line(side) {
       var sides = api.sidesOf(f.id);
       var isWinner = res && res.outcome === side;
-      return el('div', { style: 'display:flex;gap:8px;padding:5px 9px;' +
-        (isWinner ? 'font-weight:800;' : '') +
-        (sides[side] ? '' : 'color:var(--ink-3);font-style:italic;') }, [
-        el('span', { style: 'flex:1;min-width:0;overflow:hidden;' +
-          'text-overflow:ellipsis;white-space:nowrap', text: api.sideLabel(f, side) }),
+      var e = sides[side] && S.entrantsById[sides[side]];
+      return el('div', {
+        class: 'bk-side' + (isWinner ? ' win' : '') + (sides[side] ? '' : ' tbd'),
+        style: e && e.color ? '--side:' + e.color : null
+      }, [
+        el('span', { class: 'nm', text: api.sideLabel(f, side) }),
         el('span', { class: 'num', text: nums ? String(nums[side]) : '' })
       ]);
     }
     return el('button', {
-      type: 'button',
-      style: 'text-align:left;cursor:pointer;background:var(--surface);' +
-             'border:1px solid var(--rule);border-radius:8px;padding:2px 0;font:inherit;color:inherit',
+      class: 'bkm', type: 'button',
       onclick: function () { api.go('fixture', { fid: f.id }); }
     }, [
-      el('div', { class: 'tiny muted', style: 'padding:2px 9px 0',
+      el('div', { class: 'bk-lbl',
         text: f.shortLabel + (f.status === M.STATUS.BYE ? '  ·  bye' : '') }),
       line('home'),
       line('away')

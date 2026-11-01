@@ -450,6 +450,18 @@ A team's badge in a list is the same white-on-their-colour the scoreboard
 puts behind a name. One treatment, both themes, for the same reason the
 chip works: every colour in `PALETTE` clears 4.5:1 against white.
 
+**The edge means the same thing everywhere it appears.** A match row:
+each side's own colour. A result in the feed, a game in a match sheet:
+the WINNER's colour, so a column of them reads as a story rather than a
+list - and a game in play takes `--live` instead, because the grey it had
+before said "not started". A knockout tie: each side's colour, or none at
+all, since most of a bracket is placeholders ("Winner of Group B") that
+have no team behind them yet.
+
+Where that edge is coloured, the corner beside it is square
+(`border-radius: 0 r r 0`). A radius on one side of a single-sided border
+only ever looks like a mistake.
+
 **Big screen is sized off the viewport, not the phone.** It is projected
 and read from the far side of a hall by people who are not holding it, so
 `.bs-*` scales with `clamp(..vw..)` rather than sitting at phone sizes,
@@ -778,6 +790,7 @@ light and dark following the device, the scoreboard included;
 the team's colour carrying the board, and the match strip;
 tournament cards that wear their teams, and a drawn court on the
 empty screen;
+colour edges through the match sheet, the feed and the bracket;
 group tables; the stage builder (Super N with four carry-over rules, and
 seeded knockouts with byes); the bracket view; table locking with a
 divergence warning; the player leaderboard; the result feed; big-screen

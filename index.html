@@ -691,6 +691,23 @@ table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
 .fr-line { font-weight: 800; font-variant-numeric: tabular-nums;
   font-stretch: 112%; color: var(--ink); }
 
+/* A knockout tie. Each side carries its team's colour, and the one that
+   went through keeps full weight while the other drops back. */
+.bkm { width: 100%; text-align: left; cursor: pointer; font: inherit;
+  color: inherit; background: var(--surface); border: 1px solid var(--rule);
+  border-radius: var(--r1); padding: 3px 0; }
+.bkm:hover { border-color: var(--rule-2); }
+.bk-lbl { padding: 3px 10px 1px; font-size: 10px; font-weight: 700;
+  letter-spacing: .13em; text-transform: uppercase; color: var(--ink-3); }
+.bk-side { display: flex; gap: 8px; align-items: center; padding: 5px 10px;
+  border-left: 3px solid var(--side, transparent); }
+.bk-side .nm { flex: 1; min-width: 0; font-size: 13px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bk-side .num { font-variant-numeric: tabular-nums; font-weight: 800;
+  font-stretch: 112%; }
+.bk-side.win { font-weight: 800; }
+.bk-side.tbd { color: var(--ink-3); font-style: italic; }
+
 /* A tournament card wears its own teams across the top. */
 .tcard {
   display: block; width: 100%; text-align: left; cursor: pointer;
