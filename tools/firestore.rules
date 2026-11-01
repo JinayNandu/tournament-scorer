@@ -1,0 +1,61 @@
+rules_version = '2';
+
+// Tournament Scorebook - Firestore security rules.
+//
+// Paste these into Firebase console > Firestore Database > Rules, then
+// Publish. Read them first, because they decide something real.
+//
+// WHAT THESE ALLOW
+//
+// Anyone who can open the app can read every tournament in it, and write
+// to every tournament in it. There is no sign-in and no password. A link
+// sent to a player can be forwarded to anybody, and whoever holds it can
+// score, rename a team or delete a match.
+//
+// WHY
+//
+// The alternative is asking a hundred and thirty-two people to create an
+// account before they can look at a scoreboard, which is how an app like
+// this stops being used. The app already works this way by design: the
+// scoring lease in store.js is cooperative, not a security boundary - a
+// second phone opening a court gets a read-only view and an explicit
+// "Take over", because the real problem is two well-meaning scorers, not
+// an attacker.
+//
+// So the exposure is honest rather than accidental. The data is a
+// pickleball scoreboard. The worst case is somebody spoiling a table that
+// can be exported, corrected or rebuilt, and there is a JSON backup under
+// More > Backup for exactly that.
+//
+// WHAT THEY DO NOT ALLOW
+//
+// Nothing outside /tournaments is reachable at all. Anything not matched
+// below is denied, which is Firestore's default and is left to stand.
+//
+// IF THIS NEEDS TIGHTENING LATER
+//
+// The smallest useful step is to stop strangers CREATING tournaments
+// while leaving scoring open - change the create rule below to `if false`
+// and seed the tournament from the organiser's own machine. Beyond that,
+// Firebase Anonymous Auth plus an organiser-held passcode checked in
+// these rules is the usual next move; it is a real change to the app, not
+// a change to this file alone.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // The tournaments, their fixtures, their rubbers, and the scoring
+    // leases that sit beside them.
+    match /tournaments/{tournamentId}/{rest=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // The tournament documents themselves, listed on the home screen.
+    match /tournaments/{tournamentId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if true;
+    }
+  }
+}

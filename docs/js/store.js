@@ -35,6 +35,9 @@
    * sign-in to offer - a copy served from anywhere else has none, and
    * telling its visitors to go and find one sends them nowhere. */
   var runtime = false;
+  /* Which of the three is answering: the open shared backend, the
+   * artifact's own db, or nothing but this device. */
+  var backend = 'device';
   var db = null;
   var user = null;
   var userId = null;
@@ -137,7 +140,28 @@
 
   function init() {
     if (readyPromise) return readyPromise;
-    readyPromise = (function () {
+    readyPromise = openShared().then(function (shared) {
+      if (!shared) return openArtifact();
+      db = shared;
+      mode = 'cloud';
+      backend = 'firestore';
+      return info();
+    });
+    return readyPromise;
+  }
+
+  /* The open backend is tried FIRST, ahead of the artifact's own db. The
+   * whole point of configuring one is that everybody is looking at a
+   * single tournament; leaving signed-in viewers on a different store
+   * from everyone else would quietly make two, and the organiser would
+   * be the one person who could not see what the scorers were doing. */
+  function openShared() {
+    if (!TS.firestore || !TS.firestore.configured()) return Promise.resolve(null);
+    return TS.firestore.connect();
+  }
+
+  function openArtifact() {
+    return (function () {
       var claude = window.claude;
       if (!claude || typeof claude.use !== 'function') {
         mode = 'local';
@@ -151,6 +175,7 @@
         db = res[0];
         user = res[1];
         mode = db ? 'cloud' : 'local';
+        backend = db ? 'artifact' : 'device';
         if (!user) return info();
         return Promise.resolve()
           .then(function () { return user.id ? user.id() : null; })
@@ -169,12 +194,11 @@
         return info();
       });
     })();
-    return readyPromise;
   }
 
   function info() {
-    return { mode: mode, runtime: runtime, canWrite: canWrite,
-             userId: userId, clientId: clientId() };
+    return { mode: mode, backend: backend, runtime: runtime,
+             canWrite: canWrite, userId: userId, clientId: clientId() };
   }
 
   var _clientId = null;
@@ -480,6 +504,7 @@
     info: info,
     clientId: clientId,
     mode: function () { return mode; },
+    backend: function () { return backend; },
     canWrite: function () { return canWrite; },
     userId: function () { return userId; },
     get: get,
@@ -498,6 +523,7 @@
     onPending: onPending,
     flushPending: flushPending,
     // exposed for selftest
+    _isTransient: isTransient,
     _filterSort: filterSort,
     _localList: localList
   };

@@ -2022,6 +2022,75 @@
       });
     });
 
+    /* Firestore is a close enough relative of the Artifact db that the
+     * wrapper over it is thin - which makes the few places the two disagree
+     * the whole of the risk. These are those places. */
+    describe('The shared backend', function () {
+      var FS = TS.firestore;
+
+      it('a court lease goes BESIDE the rubber, never on it', function () {
+        eq(FS._leasePath('tournaments/t1/rubbers/r7'),
+           'tournaments/t1/leases/r7',
+           'scoring rewrites the rubber document whole, so a lease kept ' +
+           'there would be dropped on the floor at every point');
+      });
+
+      it('a path with no collection to move into is refused', function () {
+        eq(FS._leasePath('tournaments'), null);
+      });
+
+      it('a court nobody holds is free', function () {
+        var d = FS._leaseDecision(null, 'phoneA', 1000, 45000);
+        eq(d.acquired, true);
+        eq(d.lock.expiresAt, 46000);
+      });
+
+      it('a court this phone already holds is renewed, not refused', function () {
+        eq(FS._leaseDecision({ holder: 'phoneA', expiresAt: 9e9 },
+                             'phoneA', 1000, 45000).acquired, true);
+      });
+
+      it('another phone scoring right now keeps it', function () {
+        var d = FS._leaseDecision({ holder: 'phoneB', expiresAt: 5000 },
+                                  'phoneA', 1000, 45000);
+        eq(d.acquired, false);
+        eq(d.holder, 'phoneB');
+      });
+
+      it('a lease nobody renewed falls in', function () {
+        eq(FS._leaseDecision({ holder: 'phoneB', expiresAt: 900 },
+                             'phoneA', 1000, 45000).acquired, true,
+           'the scorer walked off with the phone in their pocket');
+      });
+
+      it('a lock with no expiry does not hold the court for ever', function () {
+        eq(FS._leaseDecision({ holder: 'phoneB' }, 'phoneA', 1000, 45000).acquired,
+           true);
+      });
+
+      /* The code is what store.js reads to decide whether a point is kept
+       * for later or thrown away, so the spelling IS the behaviour. */
+      it('a hyphenated code is read as the transient failure it is', function () {
+        var e = FS._normError({ code: 'resource-exhausted', message: 'slow down' });
+        eq(e.code, 'resource_exhausted');
+        eq(TS.store._isTransient(e), true);
+      });
+
+      it('a service prefix is stripped off', function () {
+        eq(FS._normError({ code: 'firestore/unavailable' }).code, 'unavailable');
+      });
+
+      it('a refusal is NOT transient, so it surfaces instead of being stashed',
+         function () {
+        eq(TS.store._isTransient(FS._normError({ code: 'permission-denied' })),
+           false, 'rules this app cannot satisfy have to be seen, not queued');
+      });
+
+      it('an error with no code at all is kept rather than lost', function () {
+        eq(TS.store._isTransient(FS._normError(new Error('offline'))), true);
+      });
+    });
+
     return results;
   }
 

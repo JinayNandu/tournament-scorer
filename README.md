@@ -30,13 +30,26 @@ reproduces that wrapper to build `docs/`, which is what GitHub Pages serves.
 
 ## Tests
 
-`js/selftest.js` holds 170 assertions over the pure modules — the serve
+`js/selftest.js` holds 181 assertions over the pure modules — the serve
 rotation, the tiebreakers, net run rate, carry-over counting sets,
 progression. Open the app and tap **Self test**, or visit `#selftest`.
 
-## Where the data goes
+## Scoring from several phones at once
 
-Scores are saved in the browser, on the device that recorded them. This
-copy has no server, so a tournament scored on one phone stays on that
-phone; use **Backup** to move it. `js/store.js` is an adapter with the
-seam for a shared backend already in it.
+Out of the box, scores are saved in the browser, on the device that
+recorded them: a tournament scored on one phone stays on that phone, and
+anyone else opening the link starts an empty one of their own. For a
+single scorer that is the whole story, and **More > Backup** moves a
+tournament between devices.
+
+Eleven courts scoring into one table needs somewhere shared to put it.
+Fill in `js/firebase-config.js` with a Firebase project of your own and
+that is what happens - every phone on the link reads and writes the same
+tournament, live, with no sign-in. The file itself has the four steps,
+and `tools/firestore.rules` is the matching rules file. Read that one
+before publishing a link: it leaves the tournaments open to anybody
+holding it, which is a deliberate trade and is argued in the file.
+
+`js/store.js` picks whichever backend answers first - Firestore, then
+the Artifact `db` when published there, then the device - and the rest of
+the app cannot tell which it got.

@@ -503,6 +503,64 @@ can only be exercised by stubbing `TS.store.acquire`.
 localStorage and the app works fully offline for a lone scorer. A failed
 cloud write is stashed and flushed on the next success or on tab focus.
 
+### Three backends, and the one that wins
+
+`store.js` picks in this order, and the first one that answers is the
+ONLY one used:
+
+1. **Firestore**, if `js/firebase-config.js` has been filled in.
+2. **The Artifact `db`**, when published there and the viewer is signed in.
+3. **localStorage**, alone on the device.
+
+Firestore is tried FIRST, ahead of the artifact's own db, and that order
+is deliberate. The whole reason to configure it is that everyone looks at
+one tournament; leaving signed-in viewers on a different store from
+everybody else would quietly make two, and the organiser would be the one
+person unable to see what the scorers were doing.
+
+`js/firestore.js` wraps Firestore to look exactly like the capability.
+The fit is close, because the Artifact db IS Firestore-shaped. Four
+things are not, and each one is a trap:
+
+**Firestore's `update()` is not this store's `update()`.** Here it means a
+RECURSIVE merge - that is what lets eleven scorers each write their own
+key of one fixture's `rubberSummary` without clobbering each other.
+Firestore's `update()` replaces a nested map whole, so `set(patch,
+{merge: true})` is the only correct verb. Anyone "tidying" this back to
+`update()` breaks eleven-court scoring, and it will look perfectly fine
+with one scorer testing alone.
+
+**The lease cannot live on the rubber document.** Scoring a point writes
+that whole document back, which would drop the lease at every point, and
+a heartbeat on it would wake every watcher of the match. `leasePath`
+puts it in a sibling `leases` collection instead. The Artifact db had a
+lease of its own; this one is built from a transaction, and
+`leaseDecision` holds the whole of the judgement so it can be tested
+without a network.
+
+**Firestore does not REJECT a write it cannot deliver.** It queues it and
+leaves the promise pending until the network returns, which in a hall can
+be minutes - and because `store.js` chains writes per document, one of
+those would block every later write to that court for good. The
+scoreboard would simply stop saving, silently. `withTimeout` fails it at
+eight seconds as `unavailable`, which is the transient code `store.js`
+already stashes and flushes. Firestore's own queue may land it too; that
+costs nothing, because every write here sets a whole document.
+
+**The codes are spelled differently.** Firestore hyphenates
+(`resource-exhausted`) where the capability underscores, sometimes behind
+a service prefix. `normError` normalises both, and `isTransient` reading
+it wrongly is the difference between a point kept and a point lost.
+
+The SDK is fetched from cdnjs, with SRI hashes pinned, and ONLY when a
+config is present - so the published artifact never pays for it. cdnjs
+rather than Google's own gstatic because it is an origin the Artifact
+runtime allows, which keeps one code path working in both places.
+
+`tools/firestore.rules` is the matching rules file, and it is worth
+reading: it leaves the tournaments open to anyone holding the link, for
+reasons it sets out.
+
 ---
 
 ## Where things live
@@ -515,7 +573,9 @@ js/engine-*.js    cricket · tennis
 js/standings.js   MatchResult, counting sets, comparators, tiebreakers
 js/progression.js resolveRef, topological resolve, conflicts
 js/schedule.js    circle method, part round robins, brackets, group splits
-js/store.js       adapter, db + localStorage, onSnapshot shim
+js/store.js       adapter, Firestore + db + localStorage, onSnapshot shim
+js/firestore.js   the open shared backend, wrapped to look like `db`
+js/firebase-config.js  empty until a Firebase project is made
 js/analysis.js    Base/Advance/Pro levels, shot lists, aggregation
 js/app.js         router, state, topbar, heals
 js/ui-common.js   el, sheets, fields, toasts, the category game builder
@@ -525,8 +585,9 @@ js/ui-stages.js   later rounds, brackets    js/ui-views.js    home, hub, table
 js/ui-score.js    every scoreboard          js/ui-settings.js change it after
 js/ui-extras.js   leaderboard, feed, big screen, backup
 js/ui-analysis.js the Analysis tab
-js/selftest.js    157 assertions over the pure modules
-tools/            serve.pl wrapper, shared-mode.js, the dev.html head/foot
+js/selftest.js    181 assertions over the pure modules
+tools/            serve.pl, mkpages.pl, firestore.rules, shared-mode.js,
+                  and the dev.html head/foot
 ```
 
 ## Verifying changes
@@ -544,7 +605,8 @@ cscript //E:JScript //Nologo "<scratchpad>\runtests.js" .
 
 Windows Script Host is an ES3 engine, so the runner shims the ES5 library
 methods and rewrites `.catch` / `.delete` (reserved words after a dot in
-ES3) before parsing. It loads only the DOM-free modules. **170 tests,
+ES3) before parsing. It loads only the DOM-free modules - `firestore`
+among them, for the lease and the error codes. **181 tests,
 all green** as of the last change - bar three that assert frozen
 documents, which JScript cannot express and which pass in the browser.
 
@@ -574,6 +636,18 @@ published page.
 Regenerate `dev.html` after editing `index.html`; it is a build output and
 is never published.
 
+**The hosted copy is a third build.** `tools/mkpages.pl` writes `docs/`,
+which is the folder GitHub Pages serves - the same wrapper `dev.html`
+uses, minus `shared-mode.js`. `docs/` IS committed, unlike `dev.html`,
+because it is the published site:
+
+```bash
+perl tools/mkpages.pl
+```
+
+Run it after touching `index.html` or anything in `js/`, or the live site
+keeps serving the previous version.
+
 Keep the code ES5 — no arrow functions, no `let`/`const`, no template
 literals — so the JScript runner keeps working.
 
@@ -588,6 +662,7 @@ chain and NRR; progression; storage with an offline mirror; the setup
 wizard (five steps: numbers, categories, teams, groups, format);
 score mode for every engine; the tie sheet; per-match line-ups;
 a points target per game;
+hosting as a plain static site, with an open shared backend behind it;
 group tables; the stage builder (Super N with four carry-over rules, and
 seeded knockouts with byes); the bracket view; table locking with a
 divergence warning; the player leaderboard; the result feed; big-screen
@@ -598,7 +673,8 @@ courts, the match list (with a Suggest that fits the squads), teams and
 players, and redoing the draw. A single match can also be given its own
 target from the scoring screen, stored as `rubber.scoringOverride`.
 
-**170 tests green**, thirteen of them on the serve rotation alone.
+**181 tests green**, thirteen of them on the serve rotation alone and
+eleven on the shared backend.
 
 **Not built yet / known rough edges:**
 - Only the screens that have been walked through in the local browser are
