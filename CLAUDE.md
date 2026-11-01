@@ -7,13 +7,14 @@ by testing or decided deliberately; none of it is a guess.
 
 ## What this is
 
-A scoring app for tournaments of any shape. A personal side-project - not work, not a client's, and under
-nobody's house style but its own.
+A scoring app for tournaments of any shape. A personal side-project -
+not work, not a client's, and under nobody's house style but its own.
 
 Published as a Claude Artifact at
 **https://claude.ai/artifact/EtW2LUfpNbUgLTaqCjNtxv** — republish to the
-same path to update that URL. Source lives here so it stays editable and
-could move to self-hosting later, as `railsathi` did.
+same path to update that URL. It is ALSO served as an ordinary static
+site out of `docs/`, which is where a public link points; both are built
+from the source in this folder and neither of them is the original.
 
 The format it was built for, and the one that breaks every other app:
 **12 teams × 11 players; each tie is 11 doubles matches** labelled `AA`,
