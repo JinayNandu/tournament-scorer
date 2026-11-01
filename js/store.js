@@ -1,0 +1,505 @@
+/* Tournament Scorer - storage
+ *
+ * One interface, two backends.
+ *
+ *   cloud  the artifact `db` capability. Shared and live: several phones
+ *          score different courts and everyone's table updates. Needs the
+ *          viewer signed in.
+ *   local  localStorage. A lone scorer with no account gets a fully working
+ *          app; nothing leaves the device.
+ *
+ * Document layout (about 940 documents for a 12-team pickleball league,
+ * against a 25,000 cap):
+ *
+ *   tournaments/{tid}                    meta, config, stages
+ *   tournaments/{tid}/entrants/{eid}
+ *   tournaments/{tid}/players/{pid}
+ *   tournaments/{tid}/fixtures/{fid}     sides, lineup, rubberSummary map
+ *   tournaments/{tid}/rubbers/{rid}      slots, court, lock, events, summary
+ *
+ * Events live INSIDE the rubber document, not one document each. The store
+ * caps an artifact at 25,000 documents and says outright not to map a
+ * growing stream to a document per item; a 21-point game is ~45 events of a
+ * few bytes, so a rubber document stays far under the 256 KiB limit.
+ *
+ * Two scorers opening the same rubber is handled by acquire(), the store's
+ * own single-writer lease, rather than by hoping.
+ */
+(function (TS) {
+  'use strict';
+
+  var LS_PREFIX = 'ts1:';
+  var mode = 'local';
+  /* Whether the Claude runtime is here at all, which is NOT the same as
+   * being signed in. Both land in local mode, but only one of them has a
+   * sign-in to offer - a copy served from anywhere else has none, and
+   * telling its visitors to go and find one sends them nowhere. */
+  var runtime = false;
+  var db = null;
+  var user = null;
+  var userId = null;
+  var canWrite = true;
+  var readyPromise = null;
+
+  /* ----------------------------------------------------- local emitter -- */
+
+  var listeners = [];   // {path, isCollection, cb}
+
+  function emit(path) {
+    listeners.forEach(function (l) {
+      if (l.isCollection) {
+        if (path.indexOf(l.path + '/') === 0 &&
+            path.slice(l.path.length + 1).indexOf('/') === -1) {
+          try { l.cb(localList(l.path, l.opts)); } catch (e) { report(e); }
+        }
+      } else if (l.path === path) {
+        try { l.cb(localGet(path)); } catch (e) { report(e); }
+      }
+    });
+  }
+
+  function report(e) {
+    if (window.console && console.warn) console.warn('[store]', e);
+  }
+
+  /* ------------------------------------------------------ local backend -- */
+
+  function lsKey(path) { return LS_PREFIX + path; }
+
+  function localGet(path) {
+    try {
+      var raw = window.localStorage.getItem(lsKey(path));
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { report(e); return null; }
+  }
+
+  function localSet(path, data) {
+    try {
+      window.localStorage.setItem(lsKey(path), JSON.stringify(data));
+    } catch (e) {
+      report(e);
+      throw { code: 'quota_exceeded', message: 'This device is out of storage space for the app. Export a backup, then clear finished tournaments.' };
+    }
+  }
+
+  function localDel(path) {
+    try { window.localStorage.removeItem(lsKey(path)); } catch (e) { report(e); }
+  }
+
+  function localList(collPath, opts) {
+    var out = [];
+    var prefix = LS_PREFIX + collPath + '/';
+    try {
+      for (var i = 0; i < window.localStorage.length; i++) {
+        var k = window.localStorage.key(i);
+        if (!k || k.indexOf(prefix) !== 0) continue;
+        var rest = k.slice(prefix.length);
+        if (rest.indexOf('/') !== -1) continue;      // a deeper document
+        var v = localGet(collPath + '/' + rest);
+        if (v) out.push(v);
+      }
+    } catch (e) { report(e); }
+    return filterSort(out, opts);
+  }
+
+  function filterSort(rows, opts) {
+    opts = opts || {};
+    var out = rows;
+    (opts.where || []).forEach(function (w) {
+      out = out.filter(function (r) { return testWhere(r[w[0]], w[1], w[2]); });
+    });
+    if (opts.orderBy) {
+      var f = opts.orderBy, dir = opts.dir === 'desc' ? -1 : 1;
+      out = out.slice().sort(function (a, b) {
+        return a[f] === b[f] ? 0 : (a[f] < b[f] ? -1 : 1) * dir;
+      });
+    }
+    if (opts.limit) out = out.slice(0, opts.limit);
+    return out;
+  }
+
+  function testWhere(v, op, x) {
+    switch (op) {
+      case '==': return v === x;
+      case '!=': return v !== x;
+      case '<': return v < x;
+      case '<=': return v <= x;
+      case '>': return v > x;
+      case '>=': return v >= x;
+      case 'in': return (x || []).indexOf(v) !== -1;
+      case 'not-in': return (x || []).indexOf(v) === -1;
+      case 'array-contains': return (v || []).indexOf(x) !== -1;
+      default: return true;
+    }
+  }
+
+  /* ------------------------------------------------------------- init --- */
+
+  function init() {
+    if (readyPromise) return readyPromise;
+    readyPromise = (function () {
+      var claude = window.claude;
+      if (!claude || typeof claude.use !== 'function') {
+        mode = 'local';
+        return Promise.resolve(info());
+      }
+      runtime = true;
+      return Promise.all([
+        claude.use('db').catch(function () { return null; }),
+        claude.use('user').catch(function () { return null; })
+      ]).then(function (res) {
+        db = res[0];
+        user = res[1];
+        mode = db ? 'cloud' : 'local';
+        if (!user) return info();
+        return Promise.resolve()
+          .then(function () { return user.id ? user.id() : null; })
+          .then(function (id) { userId = id; })
+          .then(function () {
+            // can("data.write") may answer null, meaning "not told" - keep
+            // the controls enabled and let a rejected write decide.
+            if (!user.can) return null;
+            return user.can('data.write');
+          })
+          .then(function (w) { if (w === false) canWrite = false; })
+          .catch(function () {})
+          .then(info);
+      }).catch(function () {
+        mode = 'local';
+        return info();
+      });
+    })();
+    return readyPromise;
+  }
+
+  function info() {
+    return { mode: mode, runtime: runtime, canWrite: canWrite,
+             userId: userId, clientId: clientId() };
+  }
+
+  var _clientId = null;
+  function clientId() {
+    if (_clientId) return _clientId;
+    try {
+      _clientId = window.localStorage.getItem(LS_PREFIX + 'clientId');
+    } catch (e) { /* private window */ }
+    if (!_clientId) {
+      _clientId = 'c' + Math.random().toString(36).slice(2, 10);
+      try { window.localStorage.setItem(LS_PREFIX + 'clientId', _clientId); } catch (e) {}
+    }
+    return _clientId;
+  }
+
+  /* ------------------------------------------------------ write queueing -- */
+
+  /* The store wants one write at a time per document, awaited. Overlapping
+   * writes to one document just make each one slower, and a burst of taps
+   * on a scoreboard is exactly how that happens. */
+  var chains = {};
+  function queued(path, fn) {
+    var prev = chains[path] || Promise.resolve();
+    var next = prev.then(fn, fn).then(function (v) {
+      if (chains[path] === next) delete chains[path];
+      return v;
+    }, function (e) {
+      if (chains[path] === next) delete chains[path];
+      throw e;
+    });
+    chains[path] = next;
+    return next;
+  }
+
+  /* --------------------------------------------------- pending (offline) -- */
+
+  /* Hall wifi drops. A cloud write that fails for a transient reason is kept
+   * on the device and flushed on the next successful call or when the tab
+   * becomes visible again, so a scorer does not lose a game. */
+  function pendingKey() { return LS_PREFIX + 'pending'; }
+
+  function readPending() {
+    try { return JSON.parse(window.localStorage.getItem(pendingKey()) || '{}'); }
+    catch (e) { return {}; }
+  }
+
+  function writePending(p) {
+    try { window.localStorage.setItem(pendingKey(), JSON.stringify(p)); }
+    catch (e) { report(e); }
+  }
+
+  function stash(path, data) {
+    var p = readPending();
+    p[path] = { data: data, at: Date.now() };
+    writePending(p);
+    notifyPending();
+  }
+
+  function unstash(path) {
+    var p = readPending();
+    if (p[path]) { delete p[path]; writePending(p); notifyPending(); }
+  }
+
+  var pendingWatchers = [];
+  function notifyPending() {
+    var n = Object.keys(readPending()).length;
+    pendingWatchers.forEach(function (cb) { try { cb(n); } catch (e) { report(e); } });
+  }
+  function onPending(cb) { pendingWatchers.push(cb); cb(Object.keys(readPending()).length); }
+
+  function flushPending() {
+    if (mode !== 'cloud' || !db) return Promise.resolve(0);
+    var p = readPending();
+    var paths = Object.keys(p);
+    if (!paths.length) return Promise.resolve(0);
+    var done = 0;
+    return paths.reduce(function (chain, path) {
+      return chain.then(function () {
+        return db.doc(path).set(p[path].data).then(function () {
+          unstash(path); done += 1;
+        }, function () { /* still offline; keep it */ });
+      });
+    }, Promise.resolve()).then(function () { return done; });
+  }
+
+  function isTransient(err) {
+    var c = err && err.code;
+    return c === 'unavailable' || c === 'resource_exhausted' || !c;
+  }
+
+  /* --------------------------------------------------------- operations -- */
+
+  function get(path) {
+    if (mode === 'cloud') {
+      return db.doc(path).get().then(function (snap) {
+        return snap.exists ? snap.data() : null;
+      }).catch(function (e) {
+        report(e);
+        return localGet(path);
+      });
+    }
+    return Promise.resolve(localGet(path));
+  }
+
+  function set(path, data) {
+    return queued(path, function () {
+      localSet(path, data);                 // always mirror, so a drop is survivable
+      if (mode !== 'cloud') { emit(path); return Promise.resolve(); }
+      return db.doc(path).set(data).then(function () {
+        unstash(path);
+        return flushPending();
+      }, function (e) {
+        if (isTransient(e)) { stash(path, data); return; }
+        throw e;
+      });
+    });
+  }
+
+  /* Merge-write. Nested objects merge recursively, which is what lets eleven
+   * scorers write {rubberSummary: {<their id>: ...}} into one fixture
+   * document without clobbering each other. */
+  function update(path, patch) {
+    return queued(path, function () {
+      var cur = localGet(path) || {};
+      localSet(path, deepMerge(cur, patch));
+      if (mode !== 'cloud') { emit(path); return Promise.resolve(); }
+      return db.doc(path).update(patch).catch(function (e) {
+        if (e && e.code === 'invalid_argument') {
+          // update() requires the document to exist; create it instead.
+          return db.doc(path).set(deepMerge(localGet(path) || {}, patch));
+        }
+        if (isTransient(e)) { stash(path, localGet(path)); return; }
+        throw e;
+      });
+    });
+  }
+
+  function del(path) {
+    return queued(path, function () {
+      localDel(path);
+      if (mode !== 'cloud') { emit(path); return Promise.resolve(); }
+      return db.doc(path).delete().catch(report);
+    });
+  }
+
+  function list(collPath, opts) {
+    opts = opts || {};
+    if (mode === 'cloud') {
+      var q = db.collection(collPath);
+      (opts.where || []).forEach(function (w) { q = q.where(w[0], w[1], w[2]); });
+      if (opts.orderBy) q = q.orderBy(opts.orderBy, opts.dir || 'asc');
+      if (opts.limit) q = q.limit(opts.limit);
+      return q.get().then(function (snap) {
+        return snap.docs.map(function (d) { return d.data(); });
+      }).catch(function (e) {
+        report(e);
+        return localList(collPath, opts);
+      });
+    }
+    return Promise.resolve(localList(collPath, opts));
+  }
+
+  function watchDoc(path, cb, onError) {
+    if (mode === 'cloud') {
+      return db.doc(path).onSnapshot(function (snap) {
+        var d = snap.exists ? snap.data() : null;
+        if (d) { try { localSet(path, d); } catch (e) {} }
+        cb(d);
+      }, onError || report);
+    }
+    var l = { path: path, isCollection: false, cb: cb };
+    listeners.push(l);
+    cb(localGet(path));
+    return function () { listeners = listeners.filter(function (x) { return x !== l; }); };
+  }
+
+  function watchCollection(collPath, opts, cb, onError) {
+    opts = opts || {};
+    if (mode === 'cloud') {
+      var q = db.collection(collPath);
+      (opts.where || []).forEach(function (w) { q = q.where(w[0], w[1], w[2]); });
+      if (opts.orderBy) q = q.orderBy(opts.orderBy, opts.dir || 'asc');
+      if (opts.limit) q = q.limit(opts.limit);
+      return q.onSnapshot(function (snap) {
+        cb(snap.docs.map(function (d) { return d.data(); }));
+      }, onError || report);
+    }
+    var l = { path: collPath, isCollection: true, cb: cb, opts: opts };
+    listeners.push(l);
+    cb(localList(collPath, opts));
+    return function () { listeners = listeners.filter(function (x) { return x !== l; }); };
+  }
+
+  /* The store's own cooperative lease. Not a security boundary - it stops
+   * two well-behaved scorers fighting over one rubber, which is the actual
+   * problem. Local mode has one writer by definition. */
+  function acquire(path, opts) {
+    if (mode !== 'cloud') return Promise.resolve({ acquired: true, local: true });
+    return db.doc(path).acquire({
+      holder: opts.holder, ttlMs: opts.ttlMs || 45000
+    }).catch(function () { return { acquired: true, degraded: true }; });
+  }
+
+  function deepMerge(base, patch) {
+    var out = {};
+    Object.keys(base || {}).forEach(function (k) { out[k] = base[k]; });
+    Object.keys(patch || {}).forEach(function (k) {
+      var v = patch[k];
+      if (v && typeof v === 'object' && !Array.isArray(v) &&
+          out[k] && typeof out[k] === 'object' && !Array.isArray(out[k])) {
+        out[k] = deepMerge(out[k], v);
+      } else {
+        out[k] = v;
+      }
+    });
+    return out;
+  }
+
+  /* -------------------------------------------------------- backup I/O -- */
+
+  /* Entrants and players travel inside the tournament document. */
+  function exportTournament(tid) {
+    return Promise.all([
+      get('tournaments/' + tid),
+      list('tournaments/' + tid + '/fixtures'),
+      list('tournaments/' + tid + '/rubbers')
+    ]).then(function (r) {
+      return {
+        format: 'tournament-scorer', version: 1,
+        exportedAt: new Date().toISOString(),
+        tournament: r[0], fixtures: r[1], rubbers: r[2]
+      };
+    });
+  }
+
+  function importTournament(bundle) {
+    if (!bundle || bundle.format !== 'tournament-scorer' || !bundle.tournament) {
+      return Promise.reject(new Error('That file is not a tournament export.'));
+    }
+    var t = bundle.tournament;
+    var base = 'tournaments/' + t.id;
+    return set(base, t).then(function () {
+      return runLimited((bundle.fixtures || []).map(function (row) {
+        return function () { return set(base + '/fixtures/' + row.id, row); };
+      }), 4);
+    }).then(function () {
+      return runLimited((bundle.rubbers || []).map(function (row) {
+        return function () { return set(base + '/rubbers/' + row.id, row); };
+      }), 4);
+    }).then(function () { return t.id; });
+  }
+
+  /* Writes to DIFFERENT documents may overlap, but firing 60 at once trips
+   * the per-viewer call rate. Four at a time is quick and safe. */
+  function runLimited(tasks, n) {
+    n = n || 4;
+    var i = 0, active = 0, failed = null;
+    return new Promise(function (resolve, reject) {
+      function pump() {
+        if (failed) return;
+        if (i >= tasks.length && active === 0) return resolve();
+        while (active < n && i < tasks.length) {
+          active += 1;
+          tasks[i++]().then(function () {
+            active -= 1; pump();
+          }, function (e) {
+            active -= 1;
+            if (e && e.code === 'invalid_argument') { failed = e; reject(e); }
+            else pump();
+          });
+        }
+      }
+      pump();
+    });
+  }
+
+  /* Drop the event logs of finished rubbers, keeping their summaries. The
+   * full pickleball season is about 2.6 MB against a 5 MB localStorage
+   * quota, so this is the valve when a device gets tight. */
+  function compact(tid) {
+    return list('tournaments/' + tid + '/rubbers').then(function (rubbers) {
+      var done = rubbers.filter(function (r) {
+        return r.summary && r.summary.complete && (r.events || []).length;
+      });
+      return done.reduce(function (chain, r) {
+        return chain.then(function () {
+          r.events = [];
+          r.compacted = true;
+          return set('tournaments/' + tid + '/rubbers/' + r.id, r);
+        });
+      }, Promise.resolve()).then(function () { return done.length; });
+    });
+  }
+
+  if (window.document) {
+    window.document.addEventListener('visibilitychange', function () {
+      if (!window.document.hidden) flushPending();
+    });
+  }
+
+  TS.store = {
+    init: init,
+    info: info,
+    clientId: clientId,
+    mode: function () { return mode; },
+    canWrite: function () { return canWrite; },
+    userId: function () { return userId; },
+    get: get,
+    set: set,
+    update: update,
+    del: del,
+    list: list,
+    watchDoc: watchDoc,
+    watchCollection: watchCollection,
+    acquire: acquire,
+    deepMerge: deepMerge,
+    exportTournament: exportTournament,
+    importTournament: importTournament,
+    runLimited: runLimited,
+    compact: compact,
+    onPending: onPending,
+    flushPending: flushPending,
+    // exposed for selftest
+    _filterSort: filterSort,
+    _localList: localList
+  };
+
+})(window.TS = window.TS || {});

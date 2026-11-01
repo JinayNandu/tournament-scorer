@@ -1,0 +1,638 @@
+<title>Tournament Scorebook</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a one-screen app shell - sticky bar, scrolling body, bottom tabs on
+   phones - with score mode taking over the whole viewport as a scoreboard.
+   Two registers: the admin screens read like a printed order of play, score
+   mode reads like a sports-hall board. */
+:root {
+  --bg:        #F2F6F5;
+  --surface:   #FFFFFF;
+  --surface-2: #E9EFEE;
+  --ink:       #10211F;
+  --ink-2:     #566B68;
+  --ink-3:     #869996;
+  --rule:      #D7E1DF;
+  --rule-2:    #BFCECB;
+  --court:     #0E4D4A;
+  --court-ink: #FFFFFF;
+  --court-soft:#DCEAE8;
+  --live:      #C4511A;
+  --live-soft: #FBE7DC;
+  --win:       #1C6B48;
+  --loss:      #8E3B35;
+  --qualify:   #A97C2F;
+  --shadow:    0 1px 2px rgba(16,33,31,.06), 0 4px 16px rgba(16,33,31,.05);
+
+  --f-ui: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-mono: 'DM Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
+  --r1: 6px; --r2: 10px; --r3: 16px;
+  --gutter: max(16px, env(safe-area-inset-left, 0px));
+  --gutter-r: max(16px, env(safe-area-inset-right, 0px));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:        #0B1312;
+    --surface:   #121D1C;
+    --surface-2: #192726;
+    --ink:       #E7EFED;
+    --ink-2:     #94A7A4;
+    --ink-3:     #6B7F7C;
+    --rule:      #223130;
+    --rule-2:    #2F403E;
+    --court:     #45B0A6;
+    --court-ink: #06201E;
+    --court-soft:#17302E;
+    --live:      #F08048;
+    --live-soft: #33201A;
+    --win:       #4FB183;
+    --loss:      #D1736C;
+    --qualify:   #D4A055;
+    --shadow:    0 1px 2px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:        #0B1312;
+  --surface:   #121D1C;
+  --surface-2: #192726;
+  --ink:       #E7EFED;
+  --ink-2:     #94A7A4;
+  --ink-3:     #6B7F7C;
+  --rule:      #223130;
+  --rule-2:    #2F403E;
+  --court:     #45B0A6;
+  --court-ink: #06201E;
+  --court-soft:#17302E;
+  --live:      #F08048;
+  --live-soft: #33201A;
+  --win:       #4FB183;
+  --loss:      #D1736C;
+  --qualify:   #D4A055;
+  --shadow:    0 1px 2px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.3);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-ui);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-text-size-adjust: 100%;
+  font-variant-numeric: tabular-nums;
+  overscroll-behavior-y: contain;
+}
+
+/* Phone first, because that is where this is used. Scoring is dozens of
+   quick taps in the same spot, which a browser is otherwise happy to read
+   as a double-tap zoom or a text selection. */
+button, .zone, .tab, .preset, .fx, .rb, label {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.zone, .board-top, .board-bottom, .tabs {
+  -webkit-user-select: none; user-select: none;
+}
+body::before {
+  content: ""; position: fixed; inset: 0 0 auto;
+  height: env(safe-area-inset-top, 0px); z-index: 60; background: var(--surface);
+}
+h1, h2, h3 { margin: 0; text-wrap: balance; font-weight: 700; letter-spacing: -.01em; }
+h1 { font-size: 22px; font-stretch: 112%; }
+h2 { font-size: 17px; }
+h3 { font-size: 14px; }
+p { margin: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--court); }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--court); outline-offset: 2px; border-radius: 4px; }
+
+/* ----------------------------------------------------------- app shell -- */
+#app { min-height: 100%; }
+#root > div { display: flex; flex-direction: column; min-height: 100%; }
+
+.topbar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 50;
+  background: var(--surface); border-bottom: 1px solid var(--rule);
+}
+.topbar-in {
+  padding-left: var(--gutter); padding-right: var(--gutter-r);
+  padding-block: 10px;
+  display: flex; align-items: center; gap: var(--s3);
+  max-width: 1100px; margin: 0 auto;
+}
+/* The way out, in the same place on every screen. Left of the title,
+   where a thumb goes looking for it. */
+.topbar-back {
+  appearance: none; background: none; border: 0; cursor: pointer;
+  font: inherit; font-size: 13.5px; font-weight: 600; color: var(--court);
+  display: inline-flex; align-items: center; gap: 3px; flex: none;
+  padding: 10px 8px 10px 0; margin-left: -2px; min-height: 42px;
+  max-width: 42%; overflow: hidden; white-space: nowrap;
+}
+.topbar-back:active { opacity: .6; }
+.topbar-back .tb-chev { font-size: 20px; line-height: 1; margin-top: -2px; }
+.topbar .title { flex: 1; min-width: 0; }
+.topbar .title b { display: block; font-size: 16px; font-stretch: 112%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar .title span { display: block; font-size: 12px; color: var(--ink-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.wrap {
+  flex: 1; width: 100%; max-width: 1100px; margin: 0 auto;
+  padding-left: var(--gutter); padding-right: var(--gutter-r);
+  padding-block: var(--s5) var(--s7);
+}
+
+.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
+  border-bottom: 1px solid var(--rule); background: var(--surface); }
+.tabs::-webkit-scrollbar { display: none; }
+.tabs-in { display: flex; gap: 2px; max-width: 1100px; margin: 0 auto; width: 100%;
+  padding-left: var(--gutter); padding-right: var(--gutter-r); }
+.tab {
+  appearance: none; background: none; border: 0; cursor: pointer;
+  padding: 10px 14px; font-size: 13px; font-weight: 600; color: var(--ink-2);
+  border-bottom: 2px solid transparent; white-space: nowrap;
+}
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--court); }
+
+/* -------------------------------------------------------------- pieces -- */
+.card {
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: var(--r3); padding: var(--s5);
+}
+.stack { display: flex; flex-direction: column; gap: var(--s4); }
+.stack-s { display: flex; flex-direction: column; gap: var(--s2); }
+.row { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.row-tight { display: flex; align-items: center; gap: var(--s2); }
+.spacer { flex: 1; }
+.muted { color: var(--ink-2); }
+.small { font-size: 13px; }
+.tiny { font-size: 11.5px; }
+.eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--ink-3); }
+.mono { font-family: var(--f-mono); font-size: 13px; }
+.num { font-variant-numeric: tabular-nums; }
+
+.btn {
+  appearance: none; cursor: pointer; border-radius: var(--r2);
+  border: 1px solid var(--rule-2); background: var(--surface); color: var(--ink);
+  padding: 9px 14px; font-size: 14px; font-weight: 600; line-height: 1.2;
+  display: inline-flex; align-items: center; gap: 7px; justify-content: center;
+}
+.btn:hover { border-color: var(--ink-3); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-primary { background: var(--court); border-color: var(--court); color: var(--court-ink); }
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-ghost { border-color: transparent; background: transparent; color: var(--ink-2); }
+.btn-ghost:hover { background: var(--surface-2); color: var(--ink); }
+.btn-danger { color: var(--loss); border-color: var(--rule-2); }
+.btn-sm { padding: 5px 10px; font-size: 12.5px; border-radius: var(--r1); }
+.btn-lg { padding: 13px 20px; font-size: 16px; }
+.btn-block { width: 100%; }
+
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.field > label { font-size: 12px; font-weight: 600; color: var(--ink-2);
+  display: flex; align-items: baseline; gap: 4px; }
+.field > label .req { color: var(--loss); font-weight: 800; font-size: 13px; }
+.field > label .opt { color: var(--ink-3); font-weight: 500; }
+.input.bad, .select.bad, .textarea.bad {
+  border-color: var(--loss); box-shadow: 0 0 0 2px var(--live-soft);
+}
+.input, .select, .textarea {
+  background: var(--surface); border: 1px solid var(--rule-2);
+  border-radius: var(--r1); padding: 10px 11px; width: 100%; min-width: 0;
+  /* 16px or smaller, and iOS Safari zooms the page the moment a field is
+     focused, leaving the layout shifted. Never go below it. */
+  font-size: 16px;
+}
+.textarea { font-family: var(--f-mono); font-size: 16px; line-height: 1.55; resize: vertical; }
+.input:focus, .select:focus, .textarea:focus { outline: 2px solid var(--court); outline-offset: -1px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: var(--s3); }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: var(--s3); }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 5px; border-radius: 999px;
+  padding: 2px 9px; font-size: 11.5px; font-weight: 700; letter-spacing: .02em;
+  background: var(--surface-2); color: var(--ink-2); white-space: nowrap;
+}
+.pill-live { background: var(--live-soft); color: var(--live); }
+.pill-done { background: var(--court-soft); color: var(--court); }
+.pill-win { color: var(--win); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+
+.banner {
+  display: flex; gap: var(--s3); align-items: flex-start;
+  border: 1px solid var(--rule); border-left: 3px solid var(--court);
+  background: var(--surface); border-radius: var(--r1);
+  padding: 10px var(--s4); font-size: 13px;
+}
+.banner-warn { border-left-color: var(--live); }
+.banner-bad { border-left-color: var(--loss); }
+
+.empty { text-align: center; padding: var(--s6) var(--s4); }
+.empty h2 { margin-bottom: var(--s2); }
+
+/* ------------------------------------------------------------- tables -- */
+.tablewrap { overflow-x: auto; border: 1px solid var(--rule);
+  border-radius: var(--r2); background: var(--surface); }
+table.t { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+table.t th, table.t td { padding: 9px 10px; text-align: right; white-space: nowrap; }
+table.t th { font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--ink-3); font-weight: 700; border-bottom: 1px solid var(--rule); }
+table.t td { border-bottom: 1px solid var(--rule); }
+table.t tr:last-child td { border-bottom: 0; }
+table.t .c-name { text-align: left; width: 99%; position: sticky; left: 0;
+  background: var(--surface); font-weight: 600; }
+table.t .c-pos { text-align: right; color: var(--ink-3); width: 1%;
+  font-variant-numeric: tabular-nums; }
+/* The team name is pinned left and the points are pinned right, so the
+   two columns the table is read for stay put while the rest scrolls.
+   With games won, games difference, points difference and points scored
+   all earning a column, a phone cannot show them at once. */
+table.t .c-pts { font-weight: 800; position: sticky; right: 0;
+  background: var(--surface); box-shadow: -8px 0 8px -8px rgba(0,0,0,.18); }
+table.t tr.qualify td { background: linear-gradient(90deg, var(--court-soft), transparent 60%); }
+table.t tr.qualify .c-name, table.t tr.qualify .c-pts { background: var(--court-soft); }
+table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
+.swatch { display: inline-block; width: 3px; height: 15px; border-radius: 2px;
+  margin-right: 8px; vertical-align: -3px; background: var(--rule-2); }
+
+/* ------------------------------------------------------------ fixtures -- */
+.fx {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  gap: var(--s3); width: 100%; text-align: left;
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: var(--r2); padding: var(--s3) var(--s4); cursor: pointer;
+}
+.fx:hover { border-color: var(--rule-2); }
+.fx .side { min-width: 0; font-weight: 600; }
+.fx .side.a { text-align: right; }
+.fx .side.tbd { color: var(--ink-3); font-weight: 500; font-style: italic; }
+.fx .sc { font-stretch: 118%; font-weight: 800; font-size: 17px; min-width: 62px;
+  text-align: center; }
+.fx .sc.pending { color: var(--ink-3); font-weight: 600; font-size: 13px; }
+.fx-meta { display: flex; gap: var(--s2); align-items: center; grid-column: 1/-1;
+  margin-top: 2px; }
+
+.rb {
+  display: grid; grid-template-columns: 44px 1fr auto; align-items: center;
+  gap: var(--s3); width: 100%; text-align: left; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: var(--r2); padding: 10px var(--s3);
+}
+.rb:hover { border-color: var(--court); }
+.rb .lbl { font-family: var(--f-mono); font-size: 12px; font-weight: 500;
+  color: var(--ink-2); background: var(--surface-2); border-radius: var(--r1);
+  padding: 3px 0; text-align: center; }
+.rb .names { min-width: 0; font-size: 13px; line-height: 1.35; }
+.rb .names .vs { color: var(--ink-3); font-size: 11px; }
+.rb .rsc { font-stretch: 115%; font-weight: 800; font-size: 15px; text-align: right;
+  white-space: nowrap; }
+
+/* ---------------------------------------------------------- scoreboard -- */
+/* Deliberately one look: a scoreboard is dark in any room. */
+.board {
+  position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column;
+  background: #07100F; color: #F2F7F5;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  overscroll-behavior: contain;   /* no pull-to-refresh mid-game */
+}
+.board-top {
+  display: flex; align-items: center; gap: var(--s3);
+  padding: 8px max(12px, env(safe-area-inset-right,0px)) 8px max(12px, env(safe-area-inset-left,0px));
+  border-bottom: 1px solid #1A2B29; flex: none;
+}
+.board-top .bt-title { flex: 1; min-width: 0; font-size: 12.5px; color: #8CA5A1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-top .bt-jump {
+  flex: 1; min-width: 0; appearance: none; background: none; border: 0;
+  text-align: left; color: #8CA5A1; font-size: 12.5px; font-family: inherit;
+  padding: 8px 4px; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.board-top .bt-jump b { color: #E6F0EE; font-weight: 800; font-size: 14px;
+  font-stretch: 112%; }
+.board-top .bt-jump:active { color: #CFE0DD; }
+.board-btn {
+  appearance: none; background: #162422; border: 1px solid #243734; color: #CFE0DD;
+  border-radius: var(--r1); padding: 6px 11px; font-size: 12.5px; font-weight: 600;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+}
+.board-btn:hover { background: #1E302D; }
+.board-btn:active { background: #2A3F3B; }
+.btn:active { background: var(--surface-2); }
+.btn-primary:active { filter: brightness(.9); }
+.board-btn[aria-pressed="true"] { background: var(--live); border-color: var(--live); color: #120703; }
+
+.zones { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 3px;
+  min-height: 0; background: #0E1A18; }
+.zone {
+  appearance: none; border: 0; cursor: pointer; position: relative;
+  background: #0B1716; color: inherit; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px; padding: var(--s4) var(--s2);
+  min-width: 0; transition: background .08s;
+  border-top: 4px solid var(--team, #2B4441);
+}
+/* The browser's own tap highlight is off, so this is the only confirmation
+   a thumb gets. Make it unmissable. */
+.zone:active { background: #1B2F2C; box-shadow: inset 0 0 0 3px var(--team, #2B4441); }
+.zone.serving { background: #0F1F1D; }
+.zone[disabled] { cursor: default; opacity: .55; }
+.zone .z-name {
+  font-size: clamp(12px, 3.4vw, 17px); font-weight: 700; color: #BFD4D0;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  letter-spacing: .01em;
+}
+.zone .z-sub { font-size: clamp(10px, 2.6vw, 12.5px); color: #7A918D;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zone .z-players { display: flex; flex-direction: column; gap: 2px;
+  align-items: center; max-width: 100%; }
+.zone .z-pl { display: flex; align-items: center; gap: 6px; max-width: 100%;
+  font-size: clamp(10px, 2.6vw, 12.5px); color: #7A918D;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zone .z-pl.on { color: #F2F7F5; font-weight: 700; }
+.zone .z-pl i { font-style: normal; font-size: 9.5px; letter-spacing: .07em;
+  text-transform: uppercase; padding: 1px 5px; border-radius: 3px;
+  background: #243734; color: #9DB5B1; flex: none; }
+.zone .z-pl.on i { background: var(--live); color: #120703; }
+.zone .z-score {
+  font-stretch: 125%; font-weight: 900; line-height: .92;
+  font-size: clamp(64px, 23vw, 168px); letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+}
+.zone .z-serve { height: 18px; display: flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--live); }
+.zone .z-serve .sv { width: 9px; height: 9px; border-radius: 50%; background: var(--live); }
+.zone .z-flag { font-size: 11px; font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--live); height: 14px; }
+.zone .z-games { display: flex; gap: 4px; height: 16px; align-items: center; }
+.zone .z-games i { font-style: normal; font-size: 11px; font-weight: 700;
+  color: #7A918D; font-family: var(--f-mono); }
+
+/* Every control in one place along the bottom, centred, rather than one
+   in each corner of the board. They are read and hit at arm's length by
+   someone standing beside a court, so they carry words instead of glyphs
+   and they are big. */
+.board-bottom {
+  flex: none; display: flex; flex-direction: column; align-items: center;
+  gap: 8px;
+  padding: 10px max(12px, env(safe-area-inset-right,0px))
+           calc(10px + env(safe-area-inset-bottom,0px)) max(12px, env(safe-area-inset-left,0px));
+  border-top: 1px solid #1A2B29; background: #07100F;
+}
+.board-note { max-width: 100%; font-size: 12px; color: #7A918D; text-align: center;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-note-tap {
+  background: none; border: 0; cursor: pointer; font: inherit; padding: 2px 0;
+  text-decoration: underline; text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+.board-controls {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; width: 100%;
+}
+.board-ctl {
+  display: inline-flex; align-items: center; gap: 7px;
+  appearance: none; background: #162422; border: 1px solid #2A3F3B; color: #DFF0EC;
+  border-radius: var(--r1); padding: 10px 13px; font-size: 13.5px; font-weight: 600;
+  font-family: inherit; cursor: pointer; min-height: 42px; white-space: nowrap;
+}
+.ctl-ico { font-size: 15px; line-height: 1; opacity: .8; }
+.board-ctl:hover { background: #1E302D; }
+.board-ctl:active { background: #2A3F3B; }
+.board-ctl:disabled { opacity: .4; cursor: default; }
+.board-ctl[aria-pressed="true"] { background: var(--live); border-color: var(--live);
+  color: #120703; }
+/* The one that leaves the board, so it is told apart from the rest. */
+.board-ctl-done { background: #1C332F; border-color: #3C5A54; }
+
+.board-banner {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--foot, 86px) + 10px); z-index: 5;
+  background: #16302C; border: 1px solid #27514A; color: #DFF0EC;
+  border-radius: var(--r2); padding: 10px var(--s4); font-size: 13.5px;
+  display: flex; align-items: center; gap: var(--s3); max-width: calc(100% - 24px);
+  box-shadow: 0 8px 28px rgba(0,0,0,.5);
+}
+/* The banner floats over the lower score, so every extra line it wraps to
+   is score the scorer cannot see. Buttons never wrap or shrink; the text
+   column takes what is left. */
+.board-banner > div { flex: 1 1 auto; min-width: 0; }
+.board-banner .board-btn { flex: 0 0 auto; white-space: nowrap; }
+.board-banner b { display: block; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+.bb-sub { font-size: 12px; color: #9DB5B1; }
+.board-banner.bb-tall { flex-wrap: wrap; max-width: min(560px, calc(100% - 24px)); }
+/* Room for the tall prompt, so it stops covering the score it is asking
+   about. Portrait stacks the sides, so only the lower one is in the way. */
+.board-tall-banner .zones { padding-bottom: 92px; }
+
+/* At phone width the explanation is the first thing to go: the heading and
+   the two buttons already say it, and the bottom row repeats the score.
+   The banner is given a definite width here because it is absolutely
+   positioned - left to shrink-to-fit, it sizes to the buttons and squeezes
+   the heading down to one word per line. */
+@media (max-width: 430px) {
+  .bb-sub { display: none; }
+  .board-banner { gap: var(--s2); padding: 9px 12px; width: calc(100% - 24px); }
+}
+
+/* Portrait on a phone: stack the two sides so each tap target is half the
+   screen and the numbers can be enormous. */
+@media (orientation: portrait) and (max-width: 620px) {
+  .zones { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+  .zone .z-score { font-size: clamp(72px, 30vw, 150px); }
+}
+
+/* Landscape on a phone is short, not narrow: the score has to be sized off
+   the height or it pushes the serve line off the bottom. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .zone { padding: 6px var(--s2); gap: 0; }
+  .zone .z-score { font-size: clamp(42px, 19vh, 108px); }
+  .zone .z-name { font-size: 13px; }
+  .zone .z-pl { font-size: 10.5px; }
+  .zone .z-games, .zone .z-serve, .zone .z-flag { height: auto; min-height: 13px; }
+  .board-top, .board-bottom { padding-block: 5px; }
+  .board-banner { padding: 7px 12px; }
+  .board-bottom { gap: 5px; padding-top: 6px;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom,0px)); }
+  .board-ctl { padding: 7px 12px; min-height: 38px; font-size: 12.5px; }
+  /* Landscape is short: taking 92px out of it would crush the digits. */
+  .board-tall-banner .zones { padding-bottom: 0; }
+}
+
+/* --------------------------------------------------------------- sheet -- */
+.sheet-bg {
+  position: fixed; inset: 0; z-index: 110; background: rgba(6,16,15,.55);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.sheet {
+  background: var(--surface); width: 100%; max-width: 560px;
+  border-radius: var(--r3) var(--r3) 0 0; border: 1px solid var(--rule);
+  padding: var(--s5) var(--gutter) calc(var(--s5) + env(safe-area-inset-bottom,0px));
+  max-height: 86vh;
+  max-height: 86dvh;        /* so the phone's own toolbars do not clip it */
+  overflow-y: auto; overscroll-behavior: contain;
+}
+@media (min-width: 620px) {
+  .sheet-bg { align-items: center; }
+  .sheet { border-radius: var(--r3); }
+}
+
+/* ------------------------------------------------------------ selftest -- */
+.st-head { padding: var(--s3) var(--s4); border-radius: var(--r2);
+  margin-bottom: var(--s4); font-size: 14px; }
+.st-good { background: var(--court-soft); color: var(--court); }
+.st-bad { background: var(--live-soft); color: var(--live); }
+.st-group { margin-bottom: var(--s5); }
+.st-group h3 { margin-bottom: var(--s2); }
+.st-group ul { list-style: none; margin: 0; padding: 0; }
+.st-group li { padding: 5px 0; border-bottom: 1px solid var(--rule); font-size: 13.5px;
+  display: flex; gap: var(--s2); flex-wrap: wrap; }
+.st-mark { font-family: var(--f-mono); font-size: 10.5px; font-weight: 500;
+  padding: 1px 5px; border-radius: 3px; flex: none; }
+.st-pass .st-mark { background: var(--court-soft); color: var(--court); }
+.st-fail .st-mark { background: var(--live-soft); color: var(--live); }
+.st-msg { width: 100%; font-family: var(--f-mono); font-size: 12px;
+  color: var(--loss); padding-left: var(--s4); }
+
+/* ------------------------------------------------------------- wizard -- */
+.steps { display: flex; gap: var(--s2); margin-bottom: var(--s5); flex-wrap: wrap; }
+.step { display: flex; align-items: center; gap: 7px; font-size: 12px;
+  color: var(--ink-3); font-weight: 600; }
+.step i { font-style: normal; width: 20px; height: 20px; border-radius: 50%;
+  border: 1px solid var(--rule-2); display: grid; place-items: center;
+  font-size: 11px; flex: none; }
+.step.on { color: var(--ink); }
+.step.on i { background: var(--court); border-color: var(--court); color: var(--court-ink); }
+.step.done i { background: var(--court-soft); border-color: var(--court-soft); color: var(--court); }
+
+.preset {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: var(--r2); padding: var(--s4);
+}
+.preset:hover, .preset[aria-pressed="true"] { border-color: var(--court); }
+.preset[aria-pressed="true"] { background: var(--court-soft); }
+.preset b { display: block; font-size: 14.5px; }
+/* The same card laid out as a row: the choice and what it costs side
+   by side, so six of them fit without a scroll. */
+.preset-row { display: flex; align-items: baseline; gap: 10px;
+  padding: 11px var(--s4); }
+.preset-row b { flex: 1; min-width: 0; }
+.preset-row span { margin-top: 0; flex: none; }
+.preset span { display: block; font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
+
+.chiplist { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+  font-family: var(--f-mono); background: var(--surface-2); color: var(--ink-2);
+  border: 1px solid var(--rule); border-radius: var(--r1); padding: 3px 8px;
+}
+.chip button { appearance: none; border: 0; background: none; cursor: pointer;
+  color: var(--ink-3); padding: 0; line-height: 1; font-size: 14px; }
+.chip button:hover { color: var(--loss); }
+
+.teamcard { border: 1px solid var(--rule); border-radius: var(--r2);
+  background: var(--surface); overflow: hidden; }
+.teamcard > header { display: flex; align-items: center; gap: var(--s2);
+  padding: 10px var(--s3); border-bottom: 1px solid var(--rule); background: var(--surface-2); }
+.teamcard > header .nm { flex: 1; min-width: 0; font-weight: 700; font-size: 14px; }
+.plrow { display: grid; grid-template-columns: 62px 1fr auto; gap: var(--s2);
+  align-items: center; padding: 5px var(--s3); border-bottom: 1px solid var(--rule); }
+.plrow:last-child { border-bottom: 0; }
+.minifield { display: flex; flex-direction: column; gap: 3px; }
+.minifield .input { text-align: center; }
+.plrow .g { font-family: var(--f-mono); font-size: 11.5px; color: var(--court); font-weight: 500; }
+
+/* ---------------------------------------------------------- on a phone -- */
+@media (max-width: 620px) {
+  /* Fingers, not pointers: nothing tappable under about 40px tall. */
+  .btn { padding: 12px 16px; }
+  .btn-sm { padding: 9px 13px; font-size: 13px; }
+  .btn-lg { padding: 15px 22px; }
+  /* All six tabs should be reachable without a sideways scroll nobody can
+     see, so they run closer to the edge here. */
+  .tab { padding: 12px 10px; font-size: 13px; }
+  .tabs-in {
+    padding-left: max(8px, env(safe-area-inset-left, 0px));
+    padding-right: max(8px, env(safe-area-inset-right, 0px));
+  }
+  .chip button { padding: 6px 8px; margin: -6px -4px -6px -2px; font-size: 16px; }
+  .plrow { padding: 8px var(--s3); }
+  .teamcard > header { padding: 12px var(--s3); }
+
+  /* Two-column form rows have nowhere to go at this width. */
+  .grid2 { grid-template-columns: 1fr; }
+  .grid3 { grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); }
+
+  /* Tables scroll sideways with the team name pinned, so keep the name
+     column narrow enough that the numbers are reachable. */
+  table.t { font-size: 13px; }
+  table.t th, table.t td { padding: 9px 6px; }
+  table.t .c-name { max-width: 116px; overflow: hidden; text-overflow: ellipsis; }
+  .tablewrap { -webkit-overflow-scrolling: touch; }
+
+  .card { padding: var(--s4); }
+  .wrap { padding-block: var(--s4) var(--s7); }
+  h1 { font-size: 20px; }
+
+  /* A fixture row: let long team names wrap rather than squeeze the score. */
+  .fx { gap: var(--s2); padding: var(--s3); }
+  .fx .side { white-space: normal; line-height: 1.25; }
+  .fx .sc { min-width: 54px; }
+
+  .rb { grid-template-columns: 40px 1fr auto; padding: 12px var(--s2); }
+}
+
+@media (max-width: 380px) {
+  .pick-grid { grid-template-columns: 1fr; }
+  .runpad { gap: 4px; }
+  .runpad .board-btn { padding: 13px 0; font-size: 17px; }
+}
+
+/* The serve picker: two squads side by side, stacking when there is no room. */
+.pick-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+  width: 100%; max-width: 460px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+
+<div id="app">
+  <div id="root"></div>
+</div>
+<div id="overlay"></div>
+
+<script src="js/model.js"></script>
+<script src="js/engines.js"></script>
+<script src="js/engine-cricket.js"></script>
+<script src="js/engine-tennis.js"></script>
+<script src="js/analysis.js"></script>
+<script src="js/standings.js"></script>
+<script src="js/progression.js"></script>
+<script src="js/schedule.js"></script>
+<script src="js/store.js"></script>
+<script src="js/selftest.js"></script>
+<script src="js/ui-common.js"></script>
+<script src="js/ui-setup.js"></script>
+<script src="js/ui-teams.js"></script>
+<script src="js/ui-matches.js"></script>
+<script src="js/ui-score.js"></script>
+<script src="js/ui-stages.js"></script>
+<script src="js/ui-settings.js"></script>
+<script src="js/ui-extras.js"></script>
+<script src="js/ui-analysis.js"></script>
+<script src="js/ui-views.js"></script>
+<script src="js/app.js"></script>

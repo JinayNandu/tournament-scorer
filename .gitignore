@@ -1,0 +1,7 @@
+# Leftover store scratch from local testing - real tournament data, and it
+# has no business in a public repository.
+.dbtmp/
+
+# Build outputs. dev.html is regenerated from index.html and the tools/
+# wrapper; docs/ is NOT here, because that is the published site.
+dev.html
