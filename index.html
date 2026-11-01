@@ -52,6 +52,9 @@
   --bd-on-live:     #FFFFFF;
   --bd-team:        #AFBEBB;
   --bd-shadow:      rgba(16,33,31,.22);
+  --bd-wash:        7%;
+  --bd-wash-serve:  12%;
+  --bd-wash-press:  17%;
 
   --f-ui: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --f-mono: 'DM Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -101,6 +104,9 @@
     --bd-on-live:     #120703;
     --bd-team:        #2B4441;
     --bd-shadow:      rgba(0,0,0,.5);
+    --bd-wash:        13%;
+    --bd-wash-serve:  19%;
+    --bd-wash-press:  26%;
     color-scheme: dark;
   }
 }
@@ -143,6 +149,9 @@
   --bd-on-live:     #120703;
   --bd-team:        #2B4441;
   --bd-shadow:      rgba(0,0,0,.5);
+  --bd-wash:        13%;
+  --bd-wash-serve:  19%;
+  --bd-wash-press:  26%;
   color-scheme: dark;
 }
 
@@ -404,24 +413,56 @@ table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
 .btn-primary:active { filter: brightness(.9); }
 .board-btn[aria-pressed="true"] { background: var(--live); border-color: var(--live); color: var(--bd-on-live); }
 
+/* The eleven games of one match, in order. The bar is 14px because every
+   row it grows by is score the scorer cannot see; the button around it is
+   padded out to a 40px target, which is what everything else on this
+   screen gives a thumb. */
+.mstrip { flex: none; display: flex; gap: 3px; background: var(--bd-bg);
+  padding: 0 max(12px, env(safe-area-inset-right,0px)) 2px
+             max(12px, env(safe-area-inset-left,0px)); }
+.ms-cell { flex: 1 1 0; min-width: 0; appearance: none; border: 0;
+  padding: 13px 0; background: none; cursor: pointer; }
+.ms-cell i { display: block; height: 14px; border-radius: 2px;
+  background: var(--bd-tag); transition: height .08s; }
+.ms-cell.live i { background: var(--live); }
+.ms-cell.on i { box-shadow: inset 0 0 0 2px var(--bd-ink); }
+.ms-cell:active i { height: 18px; }
+
 .zones { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 3px;
   min-height: 0; background: var(--bd-gutter); }
+/* The team's colour was a 4px line along the top, which at the arm's
+   length this is actually read from is no colour at all - both halves
+   looked alike and only the names told them apart. It is three things
+   now: the edge, a wash of the whole half, and a solid chip behind the
+   name. color-mix does the wash from whatever hex the team carries, so it
+   works for a colour picked by hand as well as one off the palette; the
+   plain background declaration above it is the fallback for anything that
+   cannot parse it. */
 .zone {
   appearance: none; border: 0; cursor: pointer; position: relative;
   background: var(--bd-zone); color: inherit; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 2px; padding: var(--s4) var(--s2);
+  align-items: center; justify-content: center; gap: 4px; padding: var(--s4) var(--s2);
   min-width: 0; transition: background .08s;
-  border-top: 4px solid var(--team, var(--bd-team));
+  border-top: 6px solid var(--team, var(--bd-team));
+  background: color-mix(in srgb, var(--team, transparent) var(--bd-wash), var(--bd-zone));
 }
 /* The browser's own tap highlight is off, so this is the only confirmation
    a thumb gets. Make it unmissable. */
-.zone:active { background: var(--bd-zone-press); box-shadow: inset 0 0 0 3px var(--team, var(--bd-team)); }
-.zone.serving { background: var(--bd-zone-serve); }
+.zone:active { background: var(--bd-zone-press);
+  background: color-mix(in srgb, var(--team, transparent) var(--bd-wash-press), var(--bd-zone-press));
+  box-shadow: inset 0 0 0 3px var(--team, var(--bd-team)); }
+.zone.serving { background: var(--bd-zone-serve);
+  background: color-mix(in srgb, var(--team, transparent) var(--bd-wash-serve), var(--bd-zone-serve)); }
 .zone[disabled] { cursor: default; opacity: .55; }
+/* Every colour in PALETTE clears 4.5:1 against white, which is what lets
+   the name sit ON the team's colour in both themes rather than needing a
+   light treatment and a dark one. */
 .zone .z-name {
-  font-size: clamp(12px, 3.4vw, 17px); font-weight: 700; color: var(--bd-ink-2);
+  font-size: clamp(11px, 3vw, 14px); font-weight: 800; color: #FFFFFF;
+  background: var(--team, var(--bd-team));
+  padding: 4px 12px; border-radius: 999px;
+  text-transform: uppercase; letter-spacing: .13em; font-stretch: 112%;
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  letter-spacing: .01em;
 }
 .zone .z-sub { font-size: clamp(10px, 2.6vw, 12.5px); color: var(--bd-ink-3);
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

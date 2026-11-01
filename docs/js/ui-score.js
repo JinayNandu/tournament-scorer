@@ -349,6 +349,7 @@
 
     var board = el('div', { class: 'board' + (tall ? ' board-tall-banner' : '') }, [
       topRow(S, api, sum),
+      matchStrip(S, api),
       (engine === 'rally' || engine === 'tennis') ? zones(S, api, sum, sides)
         : engine === 'tally' ? tallyZones(S, api, sum, sides)
         : engine === 'cricket' ? cricketPanel(S, api, sum, sides)
@@ -395,6 +396,52 @@
       el('span', { class: 'ctl-ico', 'aria-hidden': 'true', text: glyph }),
       el('span', { text: label })
     ];
+  }
+
+  /* Eleven games in one match is the format this whole app exists for, and
+   * until now nothing on the board said which of them had gone which way -
+   * the only route to that was a sheet, two taps away, listing them as
+   * text. The strip is one cell per game in order, filled with the colour
+   * of whoever won it, outlined on the one being scored, and a tap moves
+   * to any of them.
+   *
+   * The visible bar is 14px because every row it grows by is score the
+   * scorer cannot see, but the button around it is padded out to 40px, so
+   * the thing a thumb has to hit is still the size everything else on this
+   * screen is. */
+  function matchStrip(S, api) {
+    var order = S.rubbers.slice().sort(function (a, b) { return a.order - b.order; });
+    if (order.length < 2) return null;
+    var f = S.fixturesById[S.fid];
+    if (!f) return null;
+    var sides = api.sidesOf(S.fid);
+    var colour = {
+      home: (S.entrantsById[sides.home] || {}).color || null,
+      away: (S.entrantsById[sides.away] || {}).color || null
+    };
+
+    return el('div', { class: 'mstrip' }, order.map(function (r) {
+      var s = (f.rubberSummary || {})[r.id] || {};
+      var here = r.id === S.rid;
+      var won = s.complete && s.winner ? colour[s.winner] : null;
+      var live = !s.complete && s.rallies;
+      var attrs = {
+        class: 'ms-cell' + (here ? ' on' : '') + (live ? ' live' : ''),
+        type: 'button',
+        'aria-label': r.label + (s.complete ? ', finished ' + (s.line || '')
+                                : live ? ', in play' : ', not started'),
+        'aria-current': here ? 'true' : null,
+        onclick: function () {
+          if (here) return;
+          flush(S, api, true);
+          leave(S, api);
+          api.go('score', { rid: r.id, fid: S.fid });
+        }
+      };
+      return el('button', attrs, [
+        el('i', { style: won ? 'background:' + won : null })
+      ]);
+    }));
   }
 
   function topRow(S, api, sum) {

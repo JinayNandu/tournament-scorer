@@ -472,9 +472,34 @@
 
   /* Distinct, legible team colours. Chroma is scarce in this design, so the
    * only place it appears is identifying a team. */
-  var PALETTE = ['#0E6E66', '#B4531C', '#2F5E9E', '#7A3E86', '#9A7510',
-                 '#357A3C', '#A33A4E', '#1F6C86', '#6A5D2E', '#8A3F2A',
-                 '#44608C', '#785338'];
+  /* Team colours, and the three things each one has to survive.
+   *
+   * It carries WHITE TEXT on the light board, so every entry clears 4.5:1
+   * against white. It is a field on the DARK board, so every entry also
+   * clears 2:1 against the zone behind it - without that floor a navy or
+   * a deep brown is simply invisible there. And any two of them may end up
+   * on one screen, so what matters is the smallest gap in the set, not how
+   * nice they look in a row.
+   *
+   * The old set failed the third test where it counted. Its first six were
+   * well apart (smallest gap dE 32), which is why nothing looked wrong in
+   * a four-team test - but 3 against 11 was dE 12 and 9 against 12 was 15,
+   * close enough to read as the same colour across a court. A twelve-team
+   * tournament, which is the format this app exists for, reaches all of
+   * them. One entry also failed white text outright, at 4.26:1.
+   *
+   * These were picked by searching muted candidates (saturation under 50%)
+   * that pass both contrast floors, taking the one furthest from everything
+   * already chosen, and repeating. Smallest gap is dE 23 over the set and
+   * 39 across the first six; the worst white contrast is 4.62:1. The order
+   * is the search order, so the earlier two teams are drawn, the further
+   * apart they are.
+   *
+   * Entrants store their own hex, so changing this list never repaints a
+   * tournament that already exists. */
+  var PALETTE = ['#0D6E63', '#A63AA6', '#A64C3A', '#3A67A6', '#72792A',
+                 '#76375C', '#3E3EA3', '#61472E', '#2D8042', '#295165',
+                 '#946E38', '#A63A55'];
   function colorFor(i) { return PALETTE[i % PALETTE.length]; }
 
   function download(filename, text) {
