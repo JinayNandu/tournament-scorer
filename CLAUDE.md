@@ -782,6 +782,25 @@ perl tools/mkpages.pl
 Run it after touching `index.html` or anything in `js/`, or the live site
 keeps serving the previous version.
 
+**THERE ARE TWO LIVE COPIES, AND PUSHING UPDATES ONE OF THEM.** `git
+push` refreshes the GitHub Pages site. The Artifact is a separate publish
+and does NOT follow. Eight rounds of work once went to Pages alone while
+the artifact sat on the build from before any of it, and the person using
+the artifact link reasonably reported the app as broken - it was simply
+old. Nothing warns you: both links keep working, and the stale one looks
+like a bug in the current code.
+
+So every change ships twice:
+
+```bash
+perl tools/mkpages.pl && git push          # the Pages site
+```
+
+and an Artifact publish of `index.html` (the FRAGMENT in the root, never
+`docs/index.html`, which already carries the wrapper the runtime adds)
+with every file under `js/` passed in `files`. A file count that
+disagrees with `ls js/*.js | wc -l` means the artifact is behind.
+
 Keep the code ES5 — no arrow functions, no `let`/`const`, no template
 literals — so the JScript runner keeps working.
 
