@@ -410,6 +410,48 @@ until somebody is standing in the sun.
 runs at full strength behind white text, which it cannot do on black, so
 the light board carries MORE colour rather than less.
 
+## The team's colour is the app's only chroma
+
+It was decorative - a 4px line at the top of a scoreboard half, a swatch
+in a list - and at the distance any of this is actually read, decoration
+is invisible. It carries real work now, and in three places at once on
+the board, because one of them alone was never enough: a 6px edge, a wash
+over the whole half, and a solid chip behind the name.
+
+`color-mix` builds the wash from whatever hex the team carries, so a
+colour picked by hand works as well as one off the palette; the plain
+`background` declaration above each one is the fallback for anything that
+cannot parse it. **The wash strength is a token per theme** (`--bd-wash`
+and friends) - 13% of a colour over near-black is a hint, the same 13%
+over white is a pastel.
+
+**Every colour in `PALETTE` clears 4.5:1 against white**, which is the
+property that lets the name chip be white-on-colour in both themes
+instead of needing two treatments. It also clears 2:1 against the dark
+board, without which a navy or a deep brown is simply invisible there.
+The comment on `PALETTE` has the rest, including why the old set looked
+fine in every small test and failed at eleven teams.
+
+A match row now carries both teams' colours as edges on the two names,
+the same colours the board washes with, so a row and its scoreboard read
+as the same match.
+
+## The match strip
+
+One cell per game of a match, in order, filled with the colour of whoever
+won it, outlined on the one being scored, and a tap moves to any of them.
+`matchStrip` in `ui-score.js`, between the top bar and the zones.
+
+Eleven games in one match is the format this app exists for, and nothing
+on the board said which of them had gone which way - the only route to
+that was a sheet, two taps away, listing them as text. It draws only when
+a match has more than one game.
+
+**The bar is 14px and the button is 40px.** Every row the strip grows by
+is score the scorer cannot see, so the visible cell stays thin; the
+padding around it keeps the tap target the size the phone rules demand.
+Do not close that gap by making the bar taller.
+
 ## Do not gate the scoreboard
 
 Twice now a well-meaning setup step has read as a bug. A full-screen "who
@@ -693,6 +735,7 @@ score mode for every engine; the tie sheet; per-match line-ups;
 a points target per game;
 hosting as a plain static site, with an open shared backend behind it;
 light and dark following the device, the scoreboard included;
+the team's colour carrying the board, and the match strip;
 group tables; the stage builder (Super N with four carry-over rules, and
 seeded knockouts with byes); the bracket view; table locking with a
 divergence warning; the player leaderboard; the result feed; big-screen

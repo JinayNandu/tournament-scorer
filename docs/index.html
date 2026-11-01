@@ -7,7 +7,7 @@
    Two registers: the admin screens read like a printed order of play, score
    mode reads like a sports-hall board. */
 :root {
-  --bg:        #F2F6F5;
+  --bg:        #E7EFEC;
   --surface:   #FFFFFF;
   --surface-2: #E9EFEE;
   --ink:       #10211F;
@@ -31,20 +31,20 @@
    * follows the device now, and the light board is NOT the dark one
    * inverted: on white a team's colour runs at full strength, which it
    * cannot do on black. */
-  --bd-bg:          #F7F5EF;
-  --bd-gutter:      #DDD8CC;
+  --bd-bg:          #EDF3F1;
+  --bd-gutter:      #D2DEDB;
   --bd-zone:        #FFFFFF;
-  --bd-zone-press:  #EDE8DC;
-  --bd-zone-serve:  #FBF9F3;
-  --bd-rule:        #DDD8CC;
+  --bd-zone-press:  #DBE7E4;
+  --bd-zone-serve:  #F6FAF9;
+  --bd-rule:        #D2DEDB;
   --bd-ink:         #0E1A18;
   --bd-ink-2:       #2A3B38;
   --bd-ink-3:       #5A6E6B;
   --bd-chip:        #FFFFFF;
-  --bd-chip-line:   #C9C2B2;
-  --bd-chip-hover:  #F0ECE2;
-  --bd-chip-press:  #E4DFD2;
-  --bd-tag:         #E4DFD2;
+  --bd-chip-line:   #BBCBC7;
+  --bd-chip-hover:  #E9F1EF;
+  --bd-chip-press:  #DBE7E4;
+  --bd-tag:         #DBE7E4;
   --bd-done:        #DFEDE8;
   --bd-done-line:   #93B5AC;
   --bd-banner:      #FFFFFF;
@@ -323,7 +323,8 @@ a { color: var(--court); }
 .tablewrap { overflow-x: auto; border: 1px solid var(--rule);
   border-radius: var(--r2); background: var(--surface); }
 table.t { border-collapse: collapse; width: 100%; font-size: 13.5px; }
-table.t th, table.t td { padding: 9px 10px; text-align: right; white-space: nowrap; }
+table.t th, table.t td { padding: 10px 10px; text-align: right; white-space: nowrap; }
+table.t td { font-variant-numeric: tabular-nums; }
 table.t th { font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase;
   color: var(--ink-3); font-weight: 700; border-bottom: 1px solid var(--rule); }
 table.t td { border-bottom: 1px solid var(--rule); }
@@ -338,6 +339,9 @@ table.t .c-pos { text-align: right; color: var(--ink-3); width: 1%;
    all earning a column, a phone cannot show them at once. */
 table.t .c-pts { font-weight: 800; position: sticky; right: 0;
   background: var(--surface); box-shadow: -8px 0 8px -8px rgba(0,0,0,.18); }
+/* The number, not its heading. Widening the heading too pushed the
+   sticky column over the one beside it. */
+table.t td.c-pts { font-weight: 900; font-stretch: 118%; font-size: 15px; }
 table.t tr.qualify td { background: linear-gradient(90deg, var(--court-soft), transparent 60%); }
 table.t tr.qualify .c-name, table.t tr.qualify .c-pts { background: var(--court-soft); }
 table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
@@ -352,8 +356,14 @@ table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
   border-radius: var(--r2); padding: var(--s3) var(--s4); cursor: pointer;
 }
 .fx:hover { border-color: var(--rule-2); }
+/* A match row named two teams and showed nothing of either. The bar is
+   the same colour the board washes that half with, so a row and its
+   scoreboard are recognisably the same match. */
 .fx .side { min-width: 0; font-weight: 600; }
-.fx .side.a { text-align: right; }
+.fx .side.a { text-align: right; padding-right: 9px;
+  border-right: 3px solid var(--side, var(--rule-2)); }
+.fx .side:not(.a) { padding-left: 9px;
+  border-left: 3px solid var(--side, var(--rule-2)); }
 .fx .side.tbd { color: var(--ink-3); font-weight: 500; font-style: italic; }
 .fx .sc { font-stretch: 118%; font-weight: 800; font-size: 17px; min-width: 62px;
   text-align: center; }

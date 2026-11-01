@@ -345,6 +345,13 @@
     })));
   }
 
+  /* A side that has not resolved yet has no team and so no colour; the
+   * CSS falls back to a plain rule for those. */
+  function colourOf(S, eid) {
+    var e = eid && S.entrantsById[eid];
+    return e && e.color ? '--side:' + e.color : null;
+  }
+
   function fixtureRow(f, S, api) {
     var sides = api.sidesOf(f.id);
     var count = f.matchCount == null
@@ -398,9 +405,11 @@
         onclick: function () { api.go('fixture', { fid: f.id }); }
       }, [
         el('div', { class: 'side a' + (sides.home ? '' : ' tbd'),
+                    style: colourOf(S, sides.home),
                     text: api.sideLabel(f, 'home') }),
         el('div', { class: scoreClass, text: scoreText }),
         el('div', { class: 'side' + (sides.away ? '' : ' tbd'),
+                    style: colourOf(S, sides.away),
                     text: api.sideLabel(f, 'away') }),
         meta.length ? el('div', { class: 'fx-meta' }, meta) : null
       ]),
