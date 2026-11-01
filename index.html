@@ -708,6 +708,29 @@ table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
 .bk-side.win { font-weight: 800; }
 .bk-side.tbd { color: var(--ink-3); font-style: italic; }
 
+/* Analysis: the one figure the feature exists to produce, with shape. */
+.statnum { font-stretch: 125%; font-weight: 900; font-size: 44px; line-height: 1;
+  font-variant-numeric: tabular-nums; }
+.splitbar { display: flex; height: 10px; border-radius: 5px; overflow: hidden;
+  background: var(--surface-2); }
+.splitbar i { display: block; min-width: 0; }
+.splitbar .w { background: var(--win); }
+.splitbar .e { background: var(--loss); }
+.splitlegend { display: flex; gap: var(--s4); flex-wrap: wrap; font-size: 10px;
+  font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--ink-3); }
+.splitlegend b { color: var(--ink); font-variant-numeric: tabular-nums;
+  font-stretch: 112%; font-size: 12px; }
+.splitlegend .k { display: inline-block; width: 8px; height: 8px;
+  border-radius: 2px; margin-right: 6px; }
+.splitlegend .k.w { background: var(--win); }
+.splitlegend .k.e { background: var(--loss); }
+.sharecell { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.sharebar { height: 6px; border-radius: 3px; flex: none; }
+.sharebar.w { background: var(--win); }
+.sharebar.e { background: var(--loss); }
+.sharepct { font-variant-numeric: tabular-nums; min-width: 32px; text-align: right; }
+
 /* A tournament card wears its own teams across the top. */
 .tcard {
   display: block; width: 100%; text-align: left; cursor: pointer;

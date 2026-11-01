@@ -462,6 +462,17 @@ Where that edge is coloured, the corner beside it is square
 (`border-radius: 0 r r 0`). A radius on one side of a single-sided border
 only ever looks like a mistake.
 
+**Analysis shows its one answer, rather than stating it.** Earned against
+gifted is what the whole detail feature exists to produce and it was a
+sentence; it is a split bar in `--win` and `--loss` with the two counts
+under it. The share column is a bar per row, sized in PIXELS from the
+percentage rather than as a percentage of its cell - the cell is only as
+wide as its contents, so a percentage width there collapses.
+
+**Three choices behind a dropdown get compared by nobody.** Base, Advance
+and Pro are all on screen in Settings now, like the theme picker, and
+`levelRow` repaints itself because it lives in a sheet.
+
 **Big screen is sized off the viewport, not the phone.** It is projected
 and read from the far side of a hall by people who are not holding it, so
 `.bs-*` scales with `clamp(..vw..)` rather than sitting at phone sizes,
@@ -791,6 +802,7 @@ the team's colour carrying the board, and the match strip;
 tournament cards that wear their teams, and a drawn court on the
 empty screen;
 colour edges through the match sheet, the feed and the bracket;
+and an Analysis tab that shows its answer rather than stating it;
 group tables; the stage builder (Super N with four carry-over rules, and
 seeded knockouts with byes); the bracket view; table locking with a
 divergence warning; the player leaderboard; the result feed; big-screen

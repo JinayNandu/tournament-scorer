@@ -71,16 +71,45 @@
     }).filter(function (m) { return (m.events || []).length; });
   }
 
+  /* Earned against gifted is the one number this whole feature exists to
+   * produce, and it was a sentence. A bar says it before it is read, and
+   * the two figures under it are what somebody repeats to their team. */
   function headline(S, totals) {
     var o = totals.overall;
     var pct = o.points ? Math.round((o.winners / o.points) * 100) : 0;
     return el('div', { class: 'card stack-s' }, [
       el('div', { class: 'eyebrow', text: 'Points recorded' }),
-      el('div', { style: 'font-stretch:112%;font-weight:800;font-size:28px',
-        text: String(o.points) }),
+      el('div', { class: 'statnum', text: String(o.points) }),
+      el('div', { class: 'splitbar' }, [
+        el('i', { class: 'w', style: 'flex:' + o.winners }),
+        el('i', { class: 'e', style: 'flex:' + o.errors })
+      ]),
+      el('div', { class: 'splitlegend' }, [
+        el('span', {}, [
+          el('span', { class: 'k w' }),
+          el('b', { text: String(o.winners) }),
+          el('span', { text: ' won outright' })
+        ]),
+        el('span', {}, [
+          el('span', { class: 'k e' }),
+          el('b', { text: String(o.errors) }),
+          el('span', { text: ' given away' })
+        ])
+      ]),
       el('p', { class: 'small muted', text:
-        o.winners + ' won outright, ' + o.errors + ' given away — ' +
         pct + '% of points were earned rather than gifted.' })
+    ]);
+  }
+
+  /* A column of percentages is read one row at a time; a column of bars
+   * is read in one go. The bar is sized in px rather than as a percentage
+   * of its cell, because the cell is only as wide as its contents. */
+  function shareCell(share, kind) {
+    var pct = Math.round(share * 100);
+    return el('div', { class: 'sharecell' }, [
+      el('span', { class: 'sharebar ' + (kind === 'error' ? 'e' : 'w'),
+                   style: 'width:' + Math.max(2, Math.round(pct * 0.6)) + 'px' }),
+      el('span', { class: 'sharepct', text: pct + '%' })
     ]);
   }
 
@@ -104,7 +133,7 @@
               el('td', {}, [U.pill(r.kind === 'error' ? 'given away' : 'won',
                 r.kind === 'error' ? null : 'done')]),
               el('td', { text: String(r.n) }),
-              el('td', { text: Math.round((r.n / tally.points) * 100) + '%' })
+              el('td', {}, [shareCell(r.n / tally.points, r.kind)])
             ]);
           }))
         ])

@@ -94,11 +94,7 @@
 
         el('div', { class: 'stack-s' }, [
           el('div', { class: 'eyebrow', text: 'How much to record' }),
-          U.field('Detail', U.select(
-            TS.analysis.LEVELS.map(function (l) {
-              return { value: l.id, label: l.label };
-            }), t.config.detail || 'none',
-            function (v) { t.config.detail = v; })),
+          levelRow(t),
           el('p', { class: 'tiny muted', text:
             'Base is just the score. Advance asks how each point ended. Pro ' +
             'also asks who played the shot. Both show up under Analysis.' })
@@ -157,6 +153,29 @@
       ]);
       return body;
     });
+  }
+
+  /* Three choices behind a dropdown, with the sentence explaining them
+   * somewhere underneath, meant nobody compared them - they picked
+   * whatever was already showing. All three are on screen now.
+   *
+   * It repaints itself rather than asking for a render: this lives in a
+   * sheet, and render() deliberately leaves the overlay alone. */
+  function levelRow(t) {
+    var row = el('div', { class: 'row', role: 'group',
+                          'aria-label': 'How much to record' });
+    function paint() {
+      var now = t.config.detail || 'none';
+      U.mount(row, TS.analysis.LEVELS.map(function (l) {
+        return el('button', {
+          class: 'btn btn-sm' + (now === l.id ? ' btn-primary' : ''),
+          type: 'button', text: l.label, 'aria-pressed': String(now === l.id),
+          onclick: function () { t.config.detail = l.id; paint(); }
+        });
+      }));
+    }
+    paint();
+    return row;
   }
 
   function toggle(label, on, onchange) {
