@@ -7,6 +7,14 @@
    Two registers: the admin screens read like a printed order of play, score
    mode reads like a sports-hall board. */
 :root {
+  /* SAY OUT LOUD THAT THIS PAGE DOES BOTH SCHEMES. Without it the
+     wrapper's `color-scheme: light` is all a browser sees, and Android
+     Chrome's "darken websites" reads that as a page that cannot do dark
+     and inverts the whole thing itself - including, absurdly, when the
+     reader has just asked for light. The app looked broken and the CSS
+     was innocent: the light tokens were applied and then repainted over
+     the top by the browser. Declaring both takes that away. */
+  color-scheme: light dark;
   --bg:        #E7EFEC;
   --surface:   #FFFFFF;
   --surface-2: #E9EFEE;
@@ -110,6 +118,12 @@
     color-scheme: dark;
   }
 }
+/* `only` forbids the browser from overriding a choice somebody made on
+   purpose. On a dark phone, plain `light` is an invitation to darken it
+   again; `only light` is the one thing that says no. Browsers that do
+   not know the keyword drop the declaration and fall back to the
+   `light dark` above, which is still safe. */
+:root[data-theme="light"] { color-scheme: only light; }
 :root[data-theme="dark"] {
   --bg:        #0B1312;
   --surface:   #121D1C;
@@ -152,7 +166,7 @@
   --bd-wash:        13%;
   --bd-wash-serve:  19%;
   --bd-wash-press:  26%;
-  color-scheme: dark;
+  color-scheme: only dark;
 }
 
 * { box-sizing: border-box; }

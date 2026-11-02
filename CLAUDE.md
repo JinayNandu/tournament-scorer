@@ -442,6 +442,39 @@ control lives in one cluster at the bottom and that cluster already wraps
 on a narrow phone. The choice is global and sticks, so it is made on the
 way in - one tap, on the match sheet.
 
+**SAY OUT LOUD THAT THE PAGE DOES BOTH SCHEMES, or the browser does it
+for you.** `:root` never declared `color-scheme`, so the only one in
+scope was the wrapper's `color-scheme: light` - and Android Chrome's
+"darken websites" reads a light-only page as one that cannot do dark and
+inverts the whole thing itself. Tapping **Light** on a dark phone
+therefore produced a dark screen: the light tokens WERE applied and the
+browser repainted over the top of them. The giveaway in the report was
+the primary button, which still carried the light theme's dark teal with
+white text while every grey around it had gone black - not a theme that
+failed to apply, a theme that was applied and then overridden.
+
+Three declarations now, and each earns its place:
+
+- `:root { color-scheme: light dark; }` - the page handles both, so
+  nothing needs to help.
+- `:root[data-theme="light"] { color-scheme: only light; }` - **`only`
+  forbids the browser from overriding a choice somebody made on
+  purpose.** Plain `light` on a dark phone is an invitation to darken it
+  again; this is the one keyword that says no. A browser that does not
+  know it drops the declaration and falls back to `light dark`, which is
+  still safe.
+- `:root[data-theme="dark"] { color-scheme: only dark; }` - the same the
+  other way.
+
+The media-query block keeps plain `dark`, because that case IS following
+the phone and has nothing to refuse.
+
+Verified under an emulated dark system: auto resolves `dark`, forced
+light computes `light only` with `--bg` back to `#E7EFEC`, forced dark
+computes `dark only`. Android's own forced darkening cannot be
+reproduced here, so that part rests on `only` being the documented opt
+out rather than on a test.
+
 It costs the top bar 34px, which on the hub is the difference between a
 longish tournament name fitting and ellipsising. That is the trade: the
 back label, More and the toggle are all worth more than the last three
