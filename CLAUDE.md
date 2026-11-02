@@ -286,6 +286,25 @@ be wrong rather than merely empty: two players sharing a category, or a
 group split that no longer matches the shape it was chosen as. Both are
 contradictions, not blanks.
 
+**A gate on a field being TYPED into has to be live.** Next is disabled
+until the step's answer is good, that answer is worked out once as the
+step renders, and a text input must NOT re-render the screen under the
+caret - so nothing ever re-evaluated it. Typing a name left Next grey, and
+the only way forward was to tick "Put the players in categories", whose
+`onchange` repainted the step and let the button notice a name had been
+sitting there all along. It was reported, perfectly reasonably, as "it
+will not let me past unless I use categories" - a wrong diagnosis of a
+real bug, and the checkbox had nothing to do with it.
+
+`liveBar` is the fix. It hands back the bar AND a `sync()` for the field's
+`oninput` to call, which sets the button's `disabled` and the note under
+it and touches nothing else, so the caret stays where the typing left it.
+`test()` returns the reason the step cannot be left yet, or null; `hint`
+is the line shown when there is no such reason, which is how the teams
+step keeps saying "Players can wait". The categories step had always done
+this by hand (`check()`); basics and teams had not, and basics is the
+first screen anybody sees.
+
 - `ui-teams.js` owns teams. `ui-matches.js` owns building fixtures — one at
   a time (`oneMatch`) or the whole draw (`everyone`).
 - `ensureLeague` keeps a default single-group stage holding every team in
@@ -396,6 +415,37 @@ sunset takes the app with it. It is kept per device, like the board's side
 swap and for the same reason: two people scoring one match from opposite
 ends of a court, one in the sun and one in the shade, want different
 answers.
+
+**The toggle flips what is SHOWING; the picker is where Automatic lives.**
+`U.themeToggle` sits in the right-hand corner of every top bar and swaps
+light for dark in one tap. It reads `resolvedTheme()` rather than the
+stored choice, because flipping "automatic" means nothing - what somebody
+wants when they tap it is the opposite of whatever is in front of them -
+so a tap while on Automatic leaves an explicit light or dark behind. That
+is the point of tapping it, and the three-way picker is the way back,
+being the only place the word is written out. The icon drawn is the state
+you are going TO: drawn as the state you are already in it reads as "it is
+dark" to half the people who see it and "tap for dark" to the other half.
+
+**Either control can change it, so every change tells them all.**
+`setTheme` notifies each painter registered through `onTheme`, and so does
+the `prefers-color-scheme` listener, which is what keeps the icon honest
+when a phone goes dark at sunset while on Automatic. A control left
+showing the old answer because the other one was used is the
+Base/Advance/Pro bug again: the setting works, the screen says it has not,
+and to whoever is holding the phone those are the same thing. Painters are
+dropped once their element has left the page, or a long session
+accumulates one per render.
+
+**The scoreboard does not get one, and that is deliberate.** Every board
+control lives in one cluster at the bottom and that cluster already wraps
+on a narrow phone. The choice is global and sticks, so it is made on the
+way in - one tap, on the match sheet.
+
+It costs the top bar 34px, which on the hub is the difference between a
+longish tournament name fitting and ellipsising. That is the trade: the
+back label, More and the toggle are all worth more than the last three
+characters of a name that the screen below is already about.
 
 **The board follows too, and that IS a reversal.** It used to be one fixed
 dark look, on the stated grounds that "a scoreboard is dark in any room" -

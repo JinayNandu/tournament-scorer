@@ -551,8 +551,68 @@
       if (v === 'auto') window.localStorage.removeItem(THEME_KEY);
       else window.localStorage.setItem(THEME_KEY, v);
     } catch (e) { /* private window; the choice lasts this session */ }
-    return applyTheme();
+    var now = applyTheme();
+    notifyTheme(now);
+    return now;
   }
+
+  /* What is ON THE SCREEN, which is not what is stored: `auto` is the
+   * absence of a choice and resolves against the phone. A toggle has to
+   * know the difference, because flipping "automatic" means nothing -
+   * what somebody wants when they tap it is the opposite of whatever is
+   * in front of them. */
+  function resolvedTheme() {
+    var v = theme();
+    if (v !== 'auto') return v;
+    try {
+      return (window.matchMedia &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches)
+          ? 'dark' : 'light';
+    } catch (e) { return 'light'; }
+  }
+
+  /* Two controls show this one setting now - the toggle in every top bar
+   * and the three-way picker - and either can change it. One of them left
+   * showing the old answer because the other was used is the
+   * Base/Advance/Pro bug again: the setting works, the screen says it has
+   * not, which to whoever is holding the phone is the same thing. So every
+   * change tells all of them. A painter is dropped once its element has
+   * left the page, or a long session accumulates one per render. */
+  var themeWatchers = [];
+
+  function onTheme(node, fn) {
+    if (themeWatchers.length > 32) {
+      themeWatchers = themeWatchers.filter(function (w) {
+        return !w.node || w.node.isConnected !== false;
+      });
+    }
+    themeWatchers.push({ node: node, fn: fn });
+  }
+
+  function notifyTheme(now) {
+    var live = [];
+    themeWatchers.forEach(function (w) {
+      if (w.node && w.node.isConnected === false) return;
+      live.push(w);
+      try { w.fn(now); } catch (e) { /* a dead painter must not stop the rest */ }
+    });
+    themeWatchers = live;
+  }
+
+  /* A phone that turns dark at sunset takes the app with it, so on
+   * Automatic the toggle's icon has to turn with it too. */
+  try {
+    var themeMq = window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)');
+    var onSystemTheme = function () {
+      if (theme() === 'auto') notifyTheme(resolvedTheme());
+    };
+    if (themeMq && themeMq.addEventListener) {
+      themeMq.addEventListener('change', onSystemTheme);
+    } else if (themeMq && themeMq.addListener) {
+      themeMq.addListener(onSystemTheme);
+    }
+  } catch (e) { /* no matchMedia; the toggle is still right when tapped */ }
 
   /* Repaints itself rather than asking for a render: the colours change in
    * CSS the moment the attribute does, and this may be sitting inside a
@@ -571,7 +631,70 @@
       }));
     }
     paint();
+    onTheme(row, paint);
     return row;
+  }
+
+  /* The icon is the one you are switching TO. Drawn as the state you are
+   * already in it reads as "it is dark" to half the people who see it and
+   * "tap for dark" to the other half; the destination is the only one that
+   * is not ambiguous, and it is what the phone itself does. */
+  function themeIcon(to) {
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '1.9');
+    svg.setAttribute('stroke-linecap', 'round');
+    if (to === 'light') {
+      var c = document.createElementNS(ns, 'circle');
+      c.setAttribute('cx', '12'); c.setAttribute('cy', '12');
+      c.setAttribute('r', '4.3');
+      svg.appendChild(c);
+      /* Eight rays, stepped round rather than written out one by one. */
+      for (var i = 0; i < 8; i++) {
+        var a = i * Math.PI / 4;
+        var ln = document.createElementNS(ns, 'line');
+        ln.setAttribute('x1', (12 + Math.cos(a) * 7.3).toFixed(2));
+        ln.setAttribute('y1', (12 + Math.sin(a) * 7.3).toFixed(2));
+        ln.setAttribute('x2', (12 + Math.cos(a) * 9.7).toFixed(2));
+        ln.setAttribute('y2', (12 + Math.sin(a) * 9.7).toFixed(2));
+        svg.appendChild(ln);
+      }
+    } else {
+      var p = document.createElementNS(ns, 'path');
+      p.setAttribute('d',
+        'M20.1 14.3A8.4 8.4 0 1 1 9.7 3.9a6.6 6.6 0 0 0 10.4 10.4Z');
+      p.setAttribute('stroke-linejoin', 'round');
+      svg.appendChild(p);
+    }
+    return svg;
+  }
+
+  /* One tap, in the same corner of every screen. The picker is where the
+   * word "Automatic" is written out and the only way back to it; this is
+   * for the moment somebody walks out of the hall into the sun, when the
+   * picker is two taps and a scroll away on a screen they are not on. It
+   * flips WHAT IS SHOWING, so a tap while on Automatic leaves an explicit
+   * light or dark behind - which is the whole point of tapping it. */
+  function themeToggle() {
+    var btn = el('button', { class: 'themetoggle', type: 'button' });
+    function paint() {
+      var to = resolvedTheme() === 'dark' ? 'light' : 'dark';
+      clear(btn);
+      btn.appendChild(themeIcon(to));
+      btn.setAttribute('aria-label', 'Switch to ' + to + ' mode');
+      btn.setAttribute('title', 'Switch to ' + to + ' mode');
+    }
+    btn.onclick = function () {
+      setTheme(resolvedTheme() === 'dark' ? 'light' : 'dark');
+    };
+    paint();
+    onTheme(btn, paint);
+    return btn;
   }
 
   applyTheme();
@@ -590,7 +713,8 @@
     gameScoringOf: gameScoringOf,
     colorFor: colorFor, PALETTE: PALETTE,
     theme: theme, setTheme: setTheme, applyTheme: applyTheme,
-    themePicker: themePicker,
+    themePicker: themePicker, themeToggle: themeToggle,
+    resolvedTheme: resolvedTheme, onTheme: onTheme,
     download: download, copyText: copyText
   };
 

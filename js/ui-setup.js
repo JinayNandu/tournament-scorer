@@ -242,17 +242,55 @@
     ]);
   }
 
+  /* A gate on a field that is being TYPED into has to be live. `nextBar`
+   * works its answer out once, as the step renders, and a text input must
+   * not re-render the screen under the caret - so nothing ever
+   * re-evaluated it, and Next stayed grey over a name that had been typed.
+   * `liveBar` hands back the bar AND a `sync` for the field's `oninput` to
+   * call, which touches the button and the note under it and nothing else.
+   *
+   * `test` returns the reason the step cannot be left yet, or null when it
+   * can; `hint` is the line shown when there is no such reason. */
+  function liveBar(label, test, onNext, hint) {
+    var note = el('p', { class: 'tiny muted', style: 'text-align:center' });
+    var btn = el('button', {
+      class: 'btn btn-primary btn-lg btn-block', text: label,
+      onclick: function () { if (sync()) onNext(); }
+    });
+    function sync() {
+      var why = test();
+      btn.disabled = !!why;
+      note.textContent = why || hint || '';
+      note.style.display = note.textContent ? '' : 'none';
+      return !why;
+    }
+    sync();
+    return {
+      el: el('div', { class: 'stack-s', style: 'margin-top:8px' }, [btn, note]),
+      sync: sync
+    };
+  }
+
   /* -------------------------------------------------------- 1  basics -- */
 
   function stepBasics(W, api) {
     var way = wayOf(W.way);
     var total = W.teamCount * W.perTeam;
+    var bar = liveBar('Next', function () {
+      return String(W.name || '').trim() ? null : 'Give it a name to carry on.';
+    }, function () {
+      W.teams = defaultTeams(W.teamCount, W.teams);
+      if (W.useCats && !W.cats.length) W.cats = defaultCats(W.perTeam);
+      dealGroups(W);
+      W.step = W.useCats ? 'categories' : 'teams';
+      api.render();
+    });
 
     return el('div', { class: 'stack' }, [
       el('div', { class: 'card stack' }, [
         U.field('What is it called?', U.input({
           value: W.name, placeholder: 'Sunday pickleball',
-          oninput: function (e) { W.name = e.target.value; }
+          oninput: function (e) { W.name = e.target.value; bar.sync(); }
         })),
         el('div', { class: 'stack-s' }, [
           el('div', { class: 'eyebrow', text: 'How is it scored?' }),
@@ -309,14 +347,7 @@
           'Skip it if everyone just turns up and plays.' })
       ]),
 
-      nextBar('Next', !!W.name.trim(), function () {
-        if (!W.name.trim()) return;
-        W.teams = defaultTeams(W.teamCount, W.teams);
-        if (W.useCats && !W.cats.length) W.cats = defaultCats(W.perTeam);
-        dealGroups(W);
-        W.step = W.useCats ? 'categories' : 'teams';
-        api.render();
-      }, W.name.trim() ? null : 'Give it a name to carry on.')
+      bar.el
     ]);
   }
 
@@ -425,6 +456,12 @@
 
   function stepTeams(W, api) {
     var cats = W.useCats ? W.cats : null;
+    var bar = liveBar('Next', function () {
+      return W.teams.every(function (t) { return String(t.name || '').trim(); })
+        ? null : 'Give every team a name to carry on.';
+    }, function () {
+      W.step = 'groups'; dealGroups(W); api.render();
+    }, 'Every team needs a name. Players can wait.');
 
     return el('div', { class: 'stack' }, [
       el('p', { class: 'small muted', text:
@@ -440,7 +477,8 @@
               style: 'background:' + U.colorFor(i) }),
             U.input({ value: team.name, placeholder: 'Team name',
               style: 'flex:1;min-width:0',
-              oninput: function (e) { team.name = e.target.value; } }),
+              oninput: function (e) {
+                team.name = e.target.value; bar.sync(); } }),
             el('span', { class: 'tiny muted', style: 'flex:none',
               text: filled ? filled + ' named' : 'no names' })
           ]),
@@ -450,10 +488,7 @@
         ]);
       })),
 
-      nextBar('Next', W.teams.every(function (t) {
-        return String(t.name || '').trim(); }), function () {
-        W.step = 'groups'; dealGroups(W); api.render();
-      }, 'Every team needs a name. Players can wait.')
+      bar.el
     ]);
   }
 

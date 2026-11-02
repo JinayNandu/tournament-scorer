@@ -223,6 +223,20 @@ a { color: var(--court); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topbar .title span { display: block; font-size: 12px; color: var(--ink-2);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Light and dark in one tap, in the same corner of every screen. An icon
+   rather than a word because it sits beside the screen's own actions and
+   must not compete with them; the words are on it for a screen reader. */
+.themetoggle {
+  appearance: none; background: none; border: 0; cursor: pointer;
+  color: var(--ink-2); flex: none; padding: 0;
+  margin-left: -6px; margin-right: -8px;
+  width: 40px; height: 40px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  touch-action: manipulation;
+}
+.themetoggle svg { width: 20px; height: 20px; display: block; }
+.themetoggle:hover { color: var(--ink); background: var(--surface-2); }
+.themetoggle:active { opacity: .55; }
 
 .wrap {
   flex: 1; width: 100%; max-width: 1100px; margin: 0 auto;

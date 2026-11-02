@@ -366,7 +366,7 @@
           U.el('b', { text: title }),
           subtitle ? U.el('span', { text: subtitle }) : null
         ])
-      ].concat(actions || []))
+      ].concat(actions || []).concat([U.themeToggle()]))
     ]);
   }
 
