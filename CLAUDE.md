@@ -832,6 +832,33 @@ round, a failure between the two leaves a database with a key nobody
 holds and no way left to set one - locked, permanently, with nothing on
 screen to say why.
 
+**NEVER GUESS ABOUT A CREDENTIAL.** `access/config` is unreadable by
+everybody, organisers included, and the `organisers` list is closed to
+anyone outside it. So a client cannot tell whether a key has been set,
+and two separate pieces of code tried to work it out from a refusal and
+got it wrong in opposite directions. `organiserClaimable()` read a
+refusal as "nobody has set one", so it always offered to claim a key
+that already existed. The setup check read the same refusal as "set,
+somebody holds it", which told an organiser the door was shut while it
+stood wide open - on the one question where being wrong matters most.
+
+Both are gone. `becomeOrganiser(code, name)` is the single way in, and
+the RULES answer the question: they take the first key typed into a
+database that has none, take a matching one after that, and refuse
+anything else. That is exactly the three outcomes the screen needs, so
+the screen says both things and lets the server decide. The setup check
+reports the key as `null` - "cannot be checked from here" - unless this
+phone is itself an organiser, in which case it can list them and count.
+
+A check step is therefore THREE-STATE: true, false, or null for "cannot
+be told from here", drawn as a grey dash rather than a cross. A check
+that guesses is worse than no check.
+
+**The key cannot be changed from the app once set** - the rules only
+accept a matching one. The escape hatch is the Firebase console, which
+bypasses rules entirely: delete `access/config` and the `organisers`
+documents and the next phone to type a key claims it.
+
 **A viewer takes no lease.** Asking for one is a write; the refusal would
 arrive looking exactly like "another phone is scoring this", which is the
 one thing it is not. `acquire` answers `{acquired: false, viewer: true}`

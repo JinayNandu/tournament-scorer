@@ -541,53 +541,54 @@
     return rows;
   }
 
-  /* The organiser key is the one that lets somebody CREATE tournaments,
-   * so it is app-wide rather than per tournament, and typed once ever. */
+  /* The organiser key lets somebody CREATE tournaments, so it is
+   * app-wide rather than per tournament and is typed once, ever.
+   *
+   * ONE form for both cases. The page cannot read the key - that is the
+   * whole point of it - so it cannot know whether one has been set, and
+   * every attempt to word the screen for one case or the other is a
+   * guess that is sometimes wrong about a credential. The rules already
+   * answer it properly: they take the first key typed into a database
+   * that has none, take a matching one after that, and refuse anything
+   * else. So the screen says both things and the server decides. */
   function organiserPane(S, api, host, close) {
-    U.mount(host, [el('p', { class: 'muted', text: 'One moment…' })]);
-    TS.store.organiserClaimable().then(function (fresh) {
-      var key = U.input({ placeholder: fresh ? 'Make one up' : 'Organiser key',
-        autocomplete: 'off', spellcheck: 'false',
-        style: 'text-transform:uppercase;letter-spacing:.14em;font-weight:700' });
-      var who = U.input({ placeholder: 'Your name', autocomplete: 'off' });
-      var go = el('button', { class: 'btn btn-primary btn-lg btn-block',
-        text: fresh ? 'Set the key and start' : 'Unlock' });
-      go.onclick = function () {
-        go.disabled = true;
-        var p = fresh ? TS.store.claimOrganiser(key.value, who.value)
-                      : TS.store.joinOrganiser(key.value, who.value);
-        p.then(function () {
-          close();
-          U.toast('You are set up as an organiser.');
-          api.render();
-        }, function (e) {
-          go.disabled = false;
-          U.toast((e && e.message) || 'That did not work.', 'bad');
-        });
-      };
-      U.mount(host, [
-        fresh ? U.banner('Nobody has set this up yet, so the first key ' +
-          'typed here becomes the organiser key. Do it now, before the ' +
-          'link goes anywhere.', 'warn') : null,
-        el('div', { class: 'card stack' }, [
-          el('div', { class: 'eyebrow', text: 'Organiser' }),
-          U.field(fresh ? 'A key only you will know' : 'The organiser key', key),
-          U.field('Your name', who),
-          go
-        ]),
-        el('p', { class: 'small muted', text: fresh
-          ? 'An organiser can create tournaments and score every one of ' +
-            'them. Each tournament then gets its own code for the people ' +
-            'scoring it.'
-          : 'This is not the code for one tournament — it is the key ' +
-            'that lets you create them. If you were given a short code ' +
-            'for one tournament, go back and use that instead.' }),
-        el('div', { class: 'row' }, [
-          el('button', { class: 'btn btn-ghost btn-sm', text: 'Back',
-            onclick: function () { paintAccess(S, api, host, close); } })
-        ])
-      ]);
-    });
+    var key = U.input({ placeholder: 'Organiser key',
+      autocomplete: 'off', spellcheck: 'false',
+      style: 'text-transform:uppercase;letter-spacing:.14em;font-weight:700' });
+    var who = U.input({ placeholder: 'Your name', autocomplete: 'off' });
+    var go = el('button', { class: 'btn btn-primary btn-lg btn-block',
+      text: 'Continue' });
+    go.onclick = function () {
+      go.disabled = true;
+      TS.store.becomeOrganiser(key.value, who.value).then(function () {
+        close();
+        U.toast('You are set up as an organiser.');
+        api.render();
+      }, function (e) {
+        go.disabled = false;
+        U.toast((e && e.message) || 'That did not work.', 'bad');
+      });
+    };
+    U.mount(host, [
+      el('div', { class: 'card stack' }, [
+        el('div', { class: 'eyebrow', text: 'Organiser' }),
+        U.field('The organiser key', key),
+        U.field('Your name', who),
+        go
+      ]),
+      el('p', { class: 'small muted', text:
+        'If nobody has set a key yet, whatever you type here becomes it — ' +
+        'so do that before the link goes to anybody. If one has been set, ' +
+        'type that one.' }),
+      el('p', { class: 'small muted', text:
+        'An organiser can create tournaments and score all of them. Each ' +
+        'tournament then gets its own short code for the people scoring ' +
+        'it — if somebody gave you one of those, go back and use it there.' }),
+      el('div', { class: 'row' }, [
+        el('button', { class: 'btn btn-ghost btn-sm', text: 'Back',
+          onclick: function () { paintAccess(S, api, host, close); } })
+      ])
+    ]);
   }
 
   /* The setup has six steps and five of them fail without a sound. This
@@ -601,8 +602,12 @@
       TS.firestore.check().then(function (rows) {
         U.mount(host, [
           el('div', { class: 'stack-s' }, rows.map(function (r) {
-            return el('div', { class: 'chkrow' + (r.ok ? '' : ' bad') }, [
-              el('span', { class: 'chkmark', text: r.ok ? '✓' : '✕' }),
+            /* Three outcomes, not two: null means the check genuinely
+             * cannot be made from here, which is not a failure. */
+            return el('div', { class: 'chkrow' +
+                (r.ok === true ? '' : r.ok === false ? ' bad' : ' unknown') }, [
+              el('span', { class: 'chkmark',
+                text: r.ok === true ? '✓' : r.ok === false ? '✕' : '–' }),
               el('div', { style: 'min-width:0' }, [
                 el('b', { text: r.name }),
                 el('div', { class: 'small muted', text: r.detail })

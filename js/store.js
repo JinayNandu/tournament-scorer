@@ -321,21 +321,12 @@
       .then(function (r) { return setRole(r); });
   }
 
-  function joinOrganiser(code, name) {
+  /* One way in whether or not a key has been set, because the client
+   * cannot read the key and must not guess which case it is in. */
+  function becomeOrganiser(code, name) {
     if (backend !== 'firestore') return noCodes();
-    return TS.firestore.joinOrganiser(code, name)
+    return TS.firestore.becomeOrganiser(code, name)
       .then(function (r) { return setRole(r); });
-  }
-
-  function claimOrganiser(code, name) {
-    if (backend !== 'firestore') return noCodes();
-    return TS.firestore.claimOrganiser(code, name)
-      .then(function (r) { return setRole(r); });
-  }
-
-  function organiserClaimable() {
-    if (backend !== 'firestore') return Promise.resolve(false);
-    return TS.firestore.organiserClaimable();
   }
 
   function scorerCode(tid) {
@@ -656,8 +647,7 @@
     role: function () { return role; },
     access: access,
     useTournament: useTournament,
-    joinTournament: joinTournament, joinOrganiser: joinOrganiser,
-    claimOrganiser: claimOrganiser, organiserClaimable: organiserClaimable,
+    joinTournament: joinTournament, becomeOrganiser: becomeOrganiser,
     scorerCode: scorerCode, setScorerCode: setScorerCode, newCode: newCode,
     setRole: setRole,
     onRole: onRole,

@@ -346,7 +346,7 @@
    * see to that - so joining is an ordinary write that the server accepts
    * or refuses, and a refusal IS a wrong code. Checking in the page would
    * mean shipping the code to everyone who opens it. */
-  function claim(path, code, name) {
+  function claim(path, code, name, wrongMsg) {
     if (!store) return Promise.reject({ code: 'unavailable', message: 'Not connected.' });
     if (!me.uid) {
       return Promise.reject({ code: 'unauthenticated',
@@ -359,8 +359,8 @@
     }), WRITE_MS, path).then(function () { return true; }, function (e) {
       var n = normError(e);
       if (n.code === 'permission_denied') {
-        throw { code: 'wrong_code',
-                message: 'That code was not right. Check it with the organiser.' };
+        throw { code: 'wrong_code', message: wrongMsg ||
+                'That code was not right. Check it with the organiser.' };
       }
       throw n;
     });
@@ -373,11 +373,40 @@
     });
   }
 
-  function joinOrganiser(code, name) {
-    return claim(organiserPath(me.uid), code, name).then(function () {
-      me.organiser = true;
-      return 'admin';
-    });
+  /* ONE path, whether or not a key has been set, because the client
+   * cannot tell which and must not pretend to. `access/config` is
+   * unreadable by design, so every attempt to work it out in advance
+   * reads a refusal and guesses - and both guesses are wrong in a way
+   * that matters. Saying "nobody has set one" when somebody has invites
+   * a claim that will be refused; saying "somebody has" when nobody has
+   * tells an organiser the door is shut while it stands open.
+   *
+   * So: type the key, send it, and let the rules answer. They accept it
+   * when no key exists yet (and that key becomes THE key) or when it
+   * matches the one that does, and refuse it otherwise - which is
+   * exactly the three answers the screen needs. */
+  function becomeOrganiser(code, name) {
+    if (!store || !me.uid) {
+      return Promise.reject({ code: 'unavailable', message: 'Not connected.' });
+    }
+    var c = normCode(code);
+    if (c.length < 4) {
+      return Promise.reject({ code: 'invalid_argument',
+        message: 'Make the organiser key at least four characters.' });
+    }
+    /* MEMBERSHIP FIRST, THEN THE KEY. The other way round, a failure
+     * between the two leaves a database holding a key nobody holds and
+     * no way left to set one - locked, permanently, with nothing on
+     * screen to say why. */
+    return claim(organiserPath(me.uid), c, name,
+      'That key was not right. If somebody has already set one, it is theirs.')
+      .then(function () {
+        me.organiser = true;
+        /* Lock it in. Refused once a key exists, which is not an error -
+         * it means somebody got there first and this code matched. */
+        return withTimeout(store.doc(CONFIG_PATH).set({ organiserCode: c, at: Date.now() }),
+          WRITE_MS, CONFIG_PATH).then(null, function () {});
+      }).then(function () { return 'admin'; });
   }
 
   /* An organiser needs to SEE the code to read it out; the rules let a
@@ -399,39 +428,6 @@
       WRITE_MS, codePath(tid)).then(function () { return c; }, failed);
   }
 
-  /* The first phone to open a brand new database sets the organiser key,
-   * because the alternative is a console step done before the app has
-   * ever run and a typo nobody can diagnose. The window in which somebody
-   * else could claim it is the window before the link has been given to
-   * anybody, so in practice it is shut. The rules refuse a second claim. */
-  function organiserClaimable() {
-    if (!store) return Promise.resolve(false);
-    return exists(store, CONFIG_PATH).then(function (yes) { return !yes; });
-  }
-
-  function claimOrganiser(code, name) {
-    if (!store || !me.uid) {
-      return Promise.reject({ code: 'unavailable', message: 'Not connected.' });
-    }
-    var c = normCode(code);
-    if (c.length < 4) {
-      return Promise.reject({ code: 'invalid_argument',
-        message: 'Make the organiser key at least four characters.' });
-    }
-    /* MEMBERSHIP FIRST, THEN THE KEY. The rules let any signed-in phone
-     * become an organiser while no key exists, and shut that door the
-     * moment one does. Done the other way round, a failure between the
-     * two writes would leave a database holding a key that nobody holds
-     * and no way left to set one - locked, permanently, with nothing on
-     * screen to say why. This order's worst case is a database with an
-     * organiser and no key yet, which is simply the state before the
-     * second write and is fixed by trying again. */
-    return joinOrganiser(c, name).then(function () {
-      return withTimeout(store.doc(CONFIG_PATH).set({ organiserCode: c, at: Date.now() }),
-        WRITE_MS, CONFIG_PATH).then(function () { return 'admin'; }, failed);
-    });
-  }
-
   /* ------------------------------------------------------ setup check -- */
 
   /* Six things have to be true before a shared tournament works, and five
@@ -443,8 +439,10 @@
    * step that is wrong. */
   function check() {
     var out = [];
+    /* `ok` is true, false, or NULL for "cannot be told from here" - which
+     * is a real answer and must not be drawn as a failure. */
     function step(name, detail, ok) {
-      out.push({ name: name, ok: !!ok, detail: detail });
+      out.push({ name: name, ok: ok === null ? null : !!ok, detail: detail });
     }
 
     if (!configured()) {
@@ -526,29 +524,38 @@
             c === 'permission_denied');
         });
     }).then(function () {
-      /* Whether a key has been set cannot be read directly - that is the
-       * point of it - so it is inferred from whether anybody holds one.
-       * `organisers` is readable by an organiser and by its own owner, so
-       * a refusal here means somebody else got there first, which is
-       * itself the answer. */
-      if (!me.uid) return null;
-      return withTimeout(store.collection('organisers').limit(1).get(), READ_MS, 'organisers')
-        .then(function (snap) { return snap && snap.size > 0; },
-              function () { return true; });
-    }).then(function (held) {
-      step('The organiser key', held === null
-        ? 'Cannot tell until this phone can sign in.'
-        : held ? 'Set. Somebody holds it.'
-        : 'Not set yet. Open "Who can score" › "I am the organiser" and ' +
-          'set one BEFORE the link goes anywhere.',
-        held === true);
       return me.uid ? exists(store, organiserPath(me.uid)) : false;
     }).then(function (yes) {
       me.organiser = yes;
       step('This phone', yes
         ? 'Is an organiser: it can create tournaments and score all of them.'
         : 'Is not an organiser yet, so it can only watch.', yes);
-      return out;
+
+      /* WHETHER ANYBODY HOLDS THE KEY CANNOT BE ANSWERED FROM HERE unless
+       * this phone is one of them. The key document is unreadable by
+       * design and the organisers list is closed to everybody outside it,
+       * so a refusal proves nothing at all - and an earlier version of
+       * this read one as "set, somebody holds it", which told an
+       * organiser the door was shut while it stood wide open. A check
+       * that guesses about a credential is worse than no check. */
+      if (!me.organiser) {
+        step('The organiser key',
+          'Cannot be checked from here - it is unreadable by design, ' +
+          'which is the point of it. If nobody has set one, the next ' +
+          'phone to type one claims it.', null);
+        return out;
+      }
+      return withTimeout(store.collection('organisers').limit(20).get(), READ_MS, 'organisers')
+        .then(function (snap) {
+          var n = snap ? snap.size : 0;
+          step('The organiser key', 'Set. ' + n + ' phone' +
+            (n === 1 ? '' : 's') + ' hold it.', true);
+          return out;
+        }, function (e) {
+          step('The organiser key', 'Could not be read (' +
+            normError(e).code + ').', false);
+          return out;
+        });
     }).then(null, function () { return out; });
   }
 
@@ -561,9 +568,7 @@
     isOrganiser: function () { return me.organiser; },
     refreshRole: refreshRole,
     joinTournament: joinTournament,
-    joinOrganiser: joinOrganiser,
-    organiserClaimable: organiserClaimable,
-    claimOrganiser: claimOrganiser,
+    becomeOrganiser: becomeOrganiser,
     scorerCode: scorerCode,
     setScorerCode: setScorerCode,
     makeCode: makeCode,
