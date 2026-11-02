@@ -578,6 +578,29 @@ The words changed with it. "Nothing on yet" is an apology for a screen
 being empty; the screen is empty because the organiser has not started
 yet, so it invites them to.
 
+**THREE PEOPLE OPEN THIS LINK AND THEY WANT THREE DIFFERENT THINGS.**
+Most are there to watch. A few are scoring one court. One is running the
+event. The first screen was a list of tournaments with a note under it,
+which answers a question nobody asked and leaves all three guessing - so
+it asks instead: Watch the scores / I am scoring a match / I am running
+the tournament, one line of explanation each.
+
+**It is not a gate, and that distinction is the whole design.** It shows
+only where the app genuinely does not know - the tournament is shared,
+this phone cannot edit, and nobody has answered before (`ts1:welcomed`).
+A scorer or an organiser never sees it, because the role they already
+hold IS the answer, and on a lone device there is no role to pick. Every
+button goes somewhere real, so there is nothing to dismiss and no way to
+be stuck behind it. If storage throws, `welcomed()` returns TRUE - a
+screen that cannot remember the answer must not keep asking.
+
+**Each answer lands on the thing it names, not on a menu.** With one
+tournament - which is the normal case for an event - Watch opens it
+directly, so the link is one tap from the scores; I am scoring opens it
+AND the code sheet, ready to type; I am running opens the organiser key.
+Routing a choice to another list would be the same fault one screen
+further on.
+
 The same went for the others. An empty state names its space and says
 when it fills - "Standings / The table fills in as matches are played" -
 rather than opening with what is missing.

@@ -10,7 +10,128 @@
 
   /* ============================================================== home == */
 
+  /* ------------------------------------------------------- welcome -- */
+
+  /* THREE PEOPLE OPEN THIS LINK AND THEY WANT THREE DIFFERENT THINGS.
+   * Most are there to watch. A few are scoring one court. One is running
+   * the whole event. The first screen used to be a list of tournaments
+   * with a note underneath, which answers a question nobody asked and
+   * leaves all three of them guessing. So it asks instead.
+   *
+   * It is NOT a gate, and that distinction is the whole design. It shows
+   * only where the app genuinely does not know yet - the tournament is
+   * shared, this phone cannot edit, and nobody has answered before - and
+   * answering it once is the end of it for good. A scorer or an organiser
+   * never sees it at all, because the role they already hold IS the
+   * answer. Every button leads somewhere real, so there is nothing to
+   * dismiss and no way to get stuck behind it. */
+  var WELCOME_KEY = 'ts1:welcomed';
+
+  function welcomed() {
+    try { return window.localStorage.getItem(WELCOME_KEY) === '1'; }
+    catch (e) { return true; }   // no storage: never stand in the way
+  }
+
+  function setWelcomed() {
+    try { window.localStorage.setItem(WELCOME_KEY, '1'); } catch (e) {}
+  }
+
+  function needsWelcome(S) {
+    if (S.loading || welcomed()) return false;
+    var a = TS.store.access();
+    /* On a lone device there is nobody else and no role to pick, and the
+     * empty screen already says "start a tournament". */
+    return a.shared && !a.canEdit;
+  }
+
+  function choiceIcon(kind) {
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('class', 'ci');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '1.8');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    var paths = kind === 'watch'
+      ? ['M1.5 12S5.6 5 12 5s10.5 7 10.5 7-4.1 7-10.5 7S1.5 12 1.5 12z']
+      : kind === 'score'
+      ? ['M12 20h9', 'M16.4 3.6a2.12 2.12 0 0 1 3 3L7.5 18.5l-4 1 1-4z']
+      : ['M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z', 'M4 22V2'];
+    paths.forEach(function (d) {
+      var p = document.createElementNS(ns, 'path');
+      p.setAttribute('d', d);
+      svg.appendChild(p);
+    });
+    if (kind === 'watch') {
+      var c = document.createElementNS(ns, 'circle');
+      c.setAttribute('cx', '12'); c.setAttribute('cy', '12'); c.setAttribute('r', '3.1');
+      svg.appendChild(c);
+    }
+    return svg;
+  }
+
+  function choice(kind, title, sub, onclick) {
+    return el('button', { class: 'choice', type: 'button', onclick: onclick }, [
+      choiceIcon(kind),
+      el('span', { style: 'min-width:0' }, [
+        el('span', { class: 'ct', text: title }),
+        el('span', { class: 'cs', text: sub })
+      ])
+    ]);
+  }
+
+  function welcomeScreen(S, api) {
+    var many = S.tournaments.length;
+    var only = many === 1 ? S.tournaments[0] : null;
+
+    function openOnly(tab) {
+      S.stageId = null;
+      api.go('hub', { tid: only.id, tab: tab || 'matches' });
+    }
+
+    return el('div', {}, [
+      api.topbar('Tournament Scorebook', null, null),
+      el('div', { class: 'wrap stack' }, [
+        el('div', { class: 'card stack-s', style: 'text-align:center' }, [
+          courtMark(),
+          el('h2', { text: 'What are you here for?' }),
+          el('p', { class: 'muted', text: 'Tap one. You only get asked once.' })
+        ]),
+
+        choice('watch', 'Watch the scores',
+          many ? 'Every match as it is played. Nothing to set up.'
+               : 'Nothing has started yet, but this is where it will appear.',
+          function () {
+            setWelcomed();
+            if (only) openOnly(); else api.render();
+          }),
+
+        choice('score', 'I am scoring a match',
+          'You will need the short code from whoever is organising.',
+          function () {
+            setWelcomed();
+            if (only) { openOnly(); TS.extras.accessSheet(S, api); return; }
+            api.render();
+            U.toast(many ? 'Open the tournament you are scoring, then tap "I am scoring".'
+                         : 'Nothing has been set up yet. Ask the organiser.');
+          }),
+
+        choice('run', 'I am running the tournament',
+          'Create one, or take charge of one that is already here.',
+          function () {
+            setWelcomed();
+            api.render();
+            TS.extras.accessSheet(S, api, 'organiser');
+          })
+      ])
+    ]);
+  }
+
   function home(S, api) {
+    if (needsWelcome(S)) return welcomeScreen(S, api);
     var list = S.tournaments.length
       ? el('div', { class: 'stack-s' }, S.tournaments.map(function (t) {
           return tournamentRow(t, S, api);

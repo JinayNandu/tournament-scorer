@@ -442,6 +442,27 @@ table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
   padding: 8px max(12px, env(safe-area-inset-right,0px)) 8px max(12px, env(safe-area-inset-left,0px));
   border-bottom: 1px solid var(--bd-rule); flex: none;
 }
+/* The first screen's three answers. Big targets with one line of
+   explanation each, nothing else on the page competing with them, and
+   the same coloured edge with a square corner beside it that a match row
+   and a result in the feed already use. */
+.choice {
+  display: flex; gap: 14px; align-items: flex-start; width: 100%;
+  text-align: left; cursor: pointer; font: inherit; color: inherit;
+  background: var(--surface); border: 1px solid var(--rule);
+  border-left: 4px solid var(--court);
+  border-radius: 0 var(--r2) var(--r2) 0;
+  padding: 16px; touch-action: manipulation;
+}
+.choice:hover { border-color: var(--rule-2); }
+.choice:active { background: var(--surface-2); }
+.choice .ci { flex: none; width: 24px; height: 24px; color: var(--court);
+  margin-top: 1px; }
+.choice .ct { display: block; font-size: 16px; font-weight: 800;
+  font-stretch: 105%; }
+.choice .cs { display: block; font-size: 13px; color: var(--ink-2);
+  margin-top: 4px; line-height: 1.4; }
+
 /* A setup step that passed, or the one that did not. The cross carries
    the colour because a row of ticks should be quiet and the one failure
    should not be. */

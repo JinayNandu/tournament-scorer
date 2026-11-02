@@ -407,10 +407,11 @@
    * sheet's to guess, so it asks TS.store.access() and does as it is
    * told. The sheet repaints itself rather than calling render(), the
    * same as every other sheet in the app. */
-  function accessSheet(S, api) {
+  function accessSheet(S, api, pane) {
     U.sheet('Who can score', function (close) {
       var host = el('div', { class: 'stack' });
-      paintAccess(S, api, host, close);
+      if (pane === 'organiser') organiserPane(S, api, host, close);
+      else paintAccess(S, api, host, close);
       return [host];
     });
   }
