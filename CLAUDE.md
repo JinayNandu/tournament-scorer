@@ -794,6 +794,20 @@ without a uid, so everybody signs in anonymously on load, viewers
 included, invisibly. Forgetting to enable it in the console is the one
 setup mistake with no symptom but "nothing works".
 
+**So the app checks its own setup.** `TS.firestore.check()`, behind
+"Shared setup" on the home screen, runs the real sequence in order -
+config, SDK, sign-in, a read, the rules, the organiser key - and names
+the step that is wrong. Five of those six fail silently, and the sign-in
+one fails by making every scorer look like a viewer, which is
+indistinguishable from the app working as designed.
+
+**The rules check is a write that MUST be refused.** Nothing in
+`firestore.rules` matches `__check__/probe`, so a database actually
+running them rejects it; a write that SUCCEEDS there means the rules were
+never published and the whole database is open to anyone with the link -
+which is otherwise invisible until somebody abuses it. The probe deletes
+itself in that case. Do not add a rule matching that path.
+
 **The membership write comes BEFORE the organiser key.** The other way
 round, a failure between the two leaves a database with a key nobody
 holds and no way left to set one - locked, permanently, with nothing on

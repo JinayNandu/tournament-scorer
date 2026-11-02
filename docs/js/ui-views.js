@@ -62,7 +62,9 @@
         ]),
         el('div', { class: 'row', style: 'margin-top:18px' }, [
           el('button', { class: 'btn btn-ghost btn-sm', text: 'Self test',
-            onclick: function () { api.go('selftest'); } })
+            onclick: function () { api.go('selftest'); } }),
+          el('button', { class: 'btn btn-ghost btn-sm', text: 'Shared setup',
+            onclick: function () { TS.extras.setupSheet(S, api); } })
         ])
       ])
     ]);

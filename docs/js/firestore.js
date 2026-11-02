@@ -432,8 +432,101 @@
     });
   }
 
+  /* ------------------------------------------------------ setup check -- */
+
+  /* Six things have to be true before a shared tournament works, and five
+   * of them fail SILENTLY. Anonymous sign-in left switched off is the
+   * worst of them: every read still succeeds, every write is refused, and
+   * nothing anywhere says why - the app simply behaves as though the
+   * scorers were all viewers. So rather than leave that to be guessed at
+   * on a Sunday morning, the app runs the sequence itself and names the
+   * step that is wrong. */
+  function check() {
+    var out = [];
+    function step(name, detail, ok) {
+      out.push({ name: name, ok: !!ok, detail: detail });
+    }
+
+    if (!configured()) {
+      step('The Firebase config',
+           'js/firebase-config.js is still empty, so nothing is shared: ' +
+           'every phone keeps its own tournaments.', false);
+      return Promise.resolve(out);
+    }
+    step('The Firebase config', 'Project "' + config().projectId + '".', true);
+
+    return loadSdk().then(function () {
+      step('The Firebase SDK', 'Loaded from cdnjs, hashes matched.', true);
+    }, function (e) {
+      step('The Firebase SDK',
+           'Did not load: ' + ((e && e.message) || 'blocked') +
+           '. A network that blocks cdnjs will do this.', false);
+      throw e;
+    }).then(function () {
+      var fb = window.firebase;
+      if (!fb.apps.length) fb.initializeApp(config());
+      return signIn(fb);
+    }).then(function (uid) {
+      if (!uid) throw new Error('no uid');
+      me.uid = uid;
+      step('Anonymous sign-in', 'This phone is ' + uid.slice(0, 10) + '…', true);
+    }, function () {
+      step('Anonymous sign-in',
+           'Refused. Turn it on at Build › Authentication › Get started ' +
+           '› Anonymous › Enable. Without it the rules cannot tell one ' +
+           'phone from another and nobody can score.', false);
+      throw new Error('stop');
+    }).then(function () {
+      var fs = window.firebase.firestore();
+      try { fs.settings({ ignoreUndefinedProperties: true }); } catch (e) {}
+      store = fs;
+      return withTimeout(fs.collection('tournaments').limit(1).get(), READ_MS, 'read')
+        .then(function (snap) {
+          step('Reading', snap && snap.size
+            ? 'Works. There is already a tournament in there.'
+            : 'Works. Nothing in there yet.', true);
+        }, function (e) {
+          step('Reading', 'Refused (' + normError(e).code + '). Either the ' +
+               'rules have not been published or this is the wrong project.', false);
+        });
+    }).then(function () {
+      /* NOTHING in the rules matches this path, so a database actually
+       * running them must refuse it. A write that SUCCEEDS here means the
+       * rules were never published and the whole database is open to
+       * anybody holding the link - which is invisible until it is abused. */
+      return withTimeout(store.doc('__check__/probe').set({ at: Date.now() }),
+        WRITE_MS, 'probe').then(function () {
+          step('The rules', 'NOT published. This database is wide open: ' +
+               'anyone with the link can change anything. Paste ' +
+               'tools/firestore.rules into Firestore › Rules and Publish.', false);
+          return store.doc('__check__/probe')['delete']().then(null, function () {});
+        }, function (e) {
+          var c = normError(e).code;
+          step('The rules', c === 'permission_denied'
+            ? 'Published, and refusing what they ought to.'
+            : 'Could not tell (' + c + '). Try again on a better connection.',
+            c === 'permission_denied');
+        });
+    }).then(function () {
+      return exists(store, CONFIG_PATH);
+    }).then(function (yes) {
+      step('The organiser key', yes
+        ? 'Set, so nobody else can claim it.'
+        : 'Not set yet. Open "Who can score" › "I am the organiser" and ' +
+          'set one BEFORE the link goes anywhere.', yes);
+      return me.uid ? exists(store, organiserPath(me.uid)) : false;
+    }).then(function (yes) {
+      me.organiser = yes;
+      step('This phone', yes
+        ? 'Is an organiser: it can create tournaments and score all of them.'
+        : 'Is not an organiser yet, so it can only watch.', yes);
+      return out;
+    }).then(null, function () { return out; });
+  }
+
   TS.firestore = {
     version: VERSION,
+    check: check,
     configured: configured,
     connect: connect,
     uid: function () { return me.uid; },

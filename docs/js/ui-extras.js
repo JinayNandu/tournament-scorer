@@ -590,7 +590,39 @@
     });
   }
 
+  /* The setup has six steps and five of them fail without a sound. This
+   * runs them in order and says which one is wrong, which is the whole
+   * difference between "it does not work" and a thing you can fix. */
+  function setupSheet(S, api) {
+    U.sheet('Shared setup', function (close) {
+      var host = el('div', { class: 'stack' }, [
+        el('p', { class: 'muted', text: 'Checking…' })
+      ]);
+      TS.firestore.check().then(function (rows) {
+        U.mount(host, [
+          el('div', { class: 'stack-s' }, rows.map(function (r) {
+            return el('div', { class: 'chkrow' + (r.ok ? '' : ' bad') }, [
+              el('span', { class: 'chkmark', text: r.ok ? '✓' : '✕' }),
+              el('div', { style: 'min-width:0' }, [
+                el('b', { text: r.name }),
+                el('div', { class: 'small muted', text: r.detail })
+              ])
+            ]);
+          })),
+          el('p', { class: 'tiny muted', text:
+            'Run this again after any change in the Firebase console. A ' +
+            'new config needs the page reloaded before it is picked up.' })
+        ]);
+      }, function (e) {
+        U.mount(host, [U.banner('The check itself failed: ' +
+          ((e && e.message) || 'unknown') + '.', 'bad')]);
+      });
+      return [host];
+    });
+  }
+
   TS.extras = {
+    setupSheet: setupSheet,
     leaderboard: leaderboard, timeline: timeline, bigScreen: bigScreen,
     dataSheet: dataSheet, playerRows: playerRows, feedItems: feedItems,
     accessSheet: accessSheet

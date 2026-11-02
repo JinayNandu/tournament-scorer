@@ -428,6 +428,18 @@ table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
   padding: 8px max(12px, env(safe-area-inset-right,0px)) 8px max(12px, env(safe-area-inset-left,0px));
   border-bottom: 1px solid var(--bd-rule); flex: none;
 }
+/* A setup step that passed, or the one that did not. The cross carries
+   the colour because a row of ticks should be quiet and the one failure
+   should not be. */
+.chkrow { display: flex; gap: 10px; align-items: flex-start;
+  padding: 9px 11px; border: 1px solid var(--rule); border-radius: var(--r1);
+  background: var(--surface); }
+.chkrow.bad { border-color: var(--loss); }
+.chkrow .chkmark { flex: none; font-weight: 900; font-size: 15px;
+  line-height: 1.35; color: var(--win); }
+.chkrow.bad .chkmark { color: var(--loss); }
+.chkrow b { font-size: 13.5px; }
+
 /* A code is read off this screen and typed into another phone across a
    hall, so it is set in the biggest type on the page and spaced out. */
 .codebox {
