@@ -859,6 +859,38 @@ accept a matching one. The escape hatch is the Firebase console, which
 bypasses rules entirely: delete `access/config` and the `organisers`
 documents and the next phone to type a key claims it.
 
+### Verified against the live project
+
+Not reasoned about - run, on `tournament-scorebook`, with two different
+anonymous uids standing in for two phones. A second uid was obtained by
+signing out and reloading, which is exactly what a stranger with the
+link looks like to the rules.
+
+| | stranger | scorer of T | organiser |
+|---|---|---|---|
+| read the tournaments | yes | yes | yes |
+| create a tournament | **no** | **no** | yes |
+| write T's fixtures | **no** | yes | yes |
+| read `access/config` | no | no | **no** |
+| list `organisers` | no | no | yes |
+
+The second row is the point of the whole feature and the third is the
+point of per-tournament codes: a scorer given one tournament cannot
+start another, and cannot touch the one next door.
+
+**Both layers refuse, independently.** `TS.store.set` on a viewer
+returns `permission_denied` without touching localStorage, and the same
+write sent straight to Firestore with the store bypassed is refused by
+the rules. The local mirror stays clean, which is the thing the guard's
+position in `set()` exists to protect.
+
+**Firestore shows a refused write before it rolls it back.** Its local
+cache applies a write optimistically and fires the snapshot listener, so
+the in-memory tournament briefly read "hacked" before reverting about a
+second later. It cannot be reached through the interface - the store
+guard stops a viewer long before Firestore sees anything - but do not be
+alarmed by it when probing from a console, and do not "fix" it.
+
 **A viewer takes no lease.** Asking for one is a write; the refusal would
 arrive looking exactly like "another phone is scoring this", which is the
 one thing it is not. `acquire` answers `{acquired: false, viewer: true}`
