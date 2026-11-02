@@ -5,57 +5,163 @@ rules_version = '2';
 // Paste these into Firebase console > Firestore Database > Rules, then
 // Publish. Read them first, because they decide something real.
 //
-// WHAT THESE ALLOW
+// WHAT THEY SAY
 //
-// Anyone who can open the app can read every tournament in it, and write
-// to every tournament in it. There is no sign-in and no password. A link
-// sent to a player can be forwarded to anybody, and whoever holds it can
-// score, rename a team or delete a match.
+// Anyone who opens the link can READ every tournament, live, and write
+// nothing. That is the whole point: a spectator should get the scores
+// with no account, no password and nothing to install.
 //
-// WHY
+// Writing takes membership, and there are two kinds:
 //
-// The alternative is asking a hundred and thirty-two people to create an
-// account before they can look at a scoreboard, which is how an app like
-// this stops being used. The app already works this way by design: the
-// scoring lease in store.js is cooperative, not a security boundary - a
-// second phone opening a court gets a read-only view and an explicit
-// "Take over", because the real problem is two well-meaning scorers, not
-// an attacker.
+//   organisers/{uid}                 may create tournaments and run every
+//                                    one of them.
+//   tournaments/{tid}/scorers/{uid}  may score THAT tournament and no
+//                                    other.
 //
-// So the exposure is honest rather than accidental. The data is a
-// pickleball scoreboard. The worst case is somebody spoiling a table that
-// can be exported, corrected or rebuilt, and there is a JSON backup under
-// More > Backup for exactly that.
+// A uid comes from Firebase Anonymous sign-in, which the app does for
+// everybody on load, invisibly. It is not an identity - it is a handle on
+// one browser. That is enough, because what is being protected is not
+// "who are you" but "has somebody given this phone the code".
 //
-// WHAT THEY DO NOT ALLOW
+// HOW A PHONE BECOMES A MEMBER
 //
-// Nothing outside /tournaments is reachable at all. Anything not matched
-// below is denied, which is Firestore's default and is left to stand.
+// It writes its own membership document with the code in it. The code
+// itself is in a document NOBODY can read - these rules see it, clients
+// never do - so the check cannot be done in the page, and a wrong code is
+// simply a refused write. Checking it in JavaScript would mean shipping
+// the code to everyone who opens the app, which is not a check at all.
 //
-// IF THIS NEEDS TIGHTENING LATER
+// The code stays in the membership document, which is why those documents
+// are readable only by the member themselves and by organisers. Do not
+// loosen that to `if true` for a "who is scoring" list; the list is not
+// worth the code.
 //
-// The smallest useful step is to stop strangers CREATING tournaments
-// while leaving scoring open - change the create rule below to `if false`
-// and seed the tournament from the organiser's own machine. Beyond that,
-// Firebase Anonymous Auth plus an organiser-held passcode checked in
-// these rules is the usual next move; it is a real change to the app, not
-// a change to this file alone.
+// THE FIRST ORGANISER
+//
+// A brand new database has no organiser key, and while that is true any
+// signed-in phone may make itself an organiser. The app does this on
+// first run and then writes the key, which shuts the door. The window is
+// the one between creating the Firebase project and first opening the
+// app - before the link has been given to anybody - so in practice it is
+// already shut. If that is not good enough, create
+// `access/config` with an `organiserCode` field by hand in the console
+// BEFORE opening the app, and the door is never open at all.
+//
+// The two writes are deliberately in this order - membership first, key
+// second. The other way round, a failure between them would leave a
+// database with a key nobody holds and no way to set one: locked, for
+// good, with no message to say why.
+//
+// WHAT IS STILL NOT PROTECTED
+//
+// Anyone with a tournament's scoring code can score it, rename a team or
+// delete a match, and the rules cannot tell a scorer from someone they
+// read the code out to. That is the same trust as handing over a paper
+// scoresheet. The scoring lease in store.js is cooperative for the same
+// reason: the real problem is two well-meaning scorers, not an attacker.
+//
+// Anything not matched below is denied. That is Firestore's default and
+// it is left to stand, which means a collection added to the app later
+// will be refused until it is added here too. That is the right way
+// round.
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // The tournaments, their fixtures, their rubbers, and the scoring
-    // leases that sit beside them.
-    match /tournaments/{tournamentId}/{rest=**} {
-      allow read: if true;
-      allow write: if true;
+    function signedIn() {
+      return request.auth != null;
     }
 
-    // The tournament documents themselves, listed on the home screen.
-    match /tournaments/{tournamentId} {
+    function noKeyYet() {
+      return !exists(/databases/$(database)/documents/access/config);
+    }
+
+    function organiserCode() {
+      return get(/databases/$(database)/documents/access/config).data.organiserCode;
+    }
+
+    function scorerCode(tid) {
+      return get(/databases/$(database)/documents/tournaments/$(tid)/access/code).data.scorerCode;
+    }
+
+    function isOrganiser() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/organisers/$(request.auth.uid));
+    }
+
+    function isScorer(tid) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/tournaments/$(tid)/scorers/$(request.auth.uid));
+    }
+
+    function mayScore(tid) {
+      return isOrganiser() || isScorer(tid);
+    }
+
+    // ---- the organiser key ------------------------------------------
+    // Read by nobody. These rules read it; that is not the same thing.
+    match /access/config {
+      allow read: if false;
+      allow create: if signedIn() && noKeyYet();
+      allow update: if isOrganiser();
+      allow delete: if false;
+    }
+
+    // ---- who the organisers are --------------------------------------
+    // The document holds the key that was typed, so only its owner and
+    // the other organisers may read it.
+    match /organisers/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isOrganiser());
+      allow create: if signedIn() && request.auth.uid == uid &&
+                       (noKeyYet() || request.resource.data.code == organiserCode());
+      allow update: if false;
+      allow delete: if isOrganiser();
+    }
+
+    // ---- one tournament's scoring code -------------------------------
+    match /tournaments/{tid}/access/code {
+      allow read: if mayScore(tid);
+      allow write: if isOrganiser();
+    }
+
+    // ---- who may score one tournament --------------------------------
+    match /tournaments/{tid}/scorers/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || mayScore(tid));
+      allow create: if signedIn() && request.auth.uid == uid &&
+                       request.resource.data.code == scorerCode(tid);
+      allow update: if false;
+      // An organiser takes access away; a scorer can hand it back.
+      allow delete: if isOrganiser() || (signedIn() && request.auth.uid == uid);
+    }
+
+    // ---- the tournaments themselves ----------------------------------
+    match /tournaments/{tid} {
       allow read: if true;
-      allow create: if true;
-      allow update, delete: if true;
+      allow create: if isOrganiser();
+      allow update: if mayScore(tid);
+      allow delete: if isOrganiser();
+    }
+
+    // ---- what a tournament is made of --------------------------------
+    // Named one at a time rather than with a wildcard, because a
+    // wildcard would also match `access` and `scorers` above - and in
+    // these rules ANY matching allow wins, so one `read: if true` on a
+    // wildcard would hand out every code in the database.
+    match /tournaments/{tid}/fixtures/{fixtureId} {
+      allow read: if true;
+      allow write: if mayScore(tid);
+    }
+
+    match /tournaments/{tid}/rubbers/{rubberId} {
+      allow read: if true;
+      allow write: if mayScore(tid);
+    }
+
+    // The cooperative scoring lease. Read openly so a second phone can
+    // see who holds a court before it offers to take over.
+    match /tournaments/{tid}/leases/{rubberId} {
+      allow read: if true;
+      allow write: if mayScore(tid);
     }
   }
 }

@@ -13,7 +13,7 @@
   var S = {
     screen: 'home',
     booted: false,
-    info: { mode: 'local', canWrite: true },
+    info: { mode: 'local', role: 'admin', canEdit: true },
     pending: 0,
 
     tournaments: [],
@@ -192,6 +192,8 @@
 
   function openTournament(tid) {
     drop('tour'); drop('fix'); drop('rub');
+    /* Who you are here is not who you were on the last one. */
+    TS.store.useTournament(tid);
     S.tid = tid; S.tournament = null;
     S.entrants = []; S.players = []; S.fixtures = []; S.rubbers = [];
     S.loading = true;
@@ -381,6 +383,13 @@
     TS.store.init().then(function (info) {
       S.info = info;
       S.booted = true;
+      /* The role lands after a round trip, and every screen is drawn
+       * from it - so a screen drawn before it arrives has to be drawn
+       * again, not left showing controls that will refuse. */
+      TS.store.onRole(function () {
+        S.info = TS.store.info();
+        if (S.booted) render();
+      });
       TS.store.onPending(function (n) {
         if (n !== S.pending) { S.pending = n; if (S.booted) repaint(); }
       });

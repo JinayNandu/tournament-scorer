@@ -399,9 +399,201 @@
     }
   }
 
+  /* ------------------------------------------------------ who scores -- */
+
+  /* One button, four answers, because "who can score this?" is a single
+   * question to the person asking and three different mechanisms
+   * underneath. Which one applies is the backend's to say and not this
+   * sheet's to guess, so it asks TS.store.access() and does as it is
+   * told. The sheet repaints itself rather than calling render(), the
+   * same as every other sheet in the app. */
+  function accessSheet(S, api) {
+    U.sheet('Who can score', function (close) {
+      var host = el('div', { class: 'stack' });
+      paintAccess(S, api, host, close);
+      return [host];
+    });
+  }
+
+  function paintAccess(S, api, host, close) {
+    var a = TS.store.access();
+    if (!a.shared) return U.mount(host, deviceOnly());
+    if (!a.codes) return U.mount(host, claudeShare(a));
+    if (a.canEdit) return U.mount(host, scoringCode(S, api, host, close, a));
+    return U.mount(host, joinPane(S, api, host, close));
+  }
+
+  function deviceOnly() {
+    return [
+      U.banner('Nothing here is shared. This tournament is saved on this ' +
+               'phone and nowhere else, so there is nobody to give access ' +
+               'to and nothing to keep anybody out of.', 'warn'),
+      el('p', { class: 'small muted', text:
+        'Once the shared backend is set up, this becomes a link anyone ' +
+        'can watch live, with a code for the people doing the scoring.' })
+    ];
+  }
+
+  /* On the artifact, claude.ai has already decided this and the app must
+   * not pretend to. Saying where the real switch is beats offering a
+   * second one that does nothing. */
+  function claudeShare(a) {
+    return [
+      el('div', { class: 'card stack-s' }, [
+        el('div', { class: 'eyebrow', text: 'On this link you are' }),
+        el('div', { style: 'font-weight:800;font-size:20px',
+          text: a.canEdit ? 'Scoring' : 'Watching' })
+      ]),
+      el('p', { class: 'small muted', text:
+        'Who can score here is set in the share menu of this page, not ' +
+        'in the app. Give somebody Can edit or Can contribute and they ' +
+        'can score; give them Can view and they watch it live. This app ' +
+        'cannot override that, and does not try to.' })
+    ];
+  }
+
+  function scoringCode(S, api, host, close, a) {
+    var box = el('div', { class: 'codebox', text: '…' });
+    var rows = [
+      el('div', { class: 'card stack-s' }, [
+        el('div', { class: 'eyebrow', text: 'The code for this tournament' }),
+        box,
+        el('p', { class: 'tiny muted', text:
+          'Read it out to whoever is scoring. They open this same link, ' +
+          'tap "I am scoring" and type it in. Everybody else watches ' +
+          'live with nothing to type at all.' })
+      ])
+    ];
+
+    if (a.organiser) {
+      rows.push(el('div', { class: 'row', style: 'gap:8px' }, [
+        el('button', { class: 'btn btn-sm', text: 'Copy',
+          onclick: function () {
+            U.copyText(box.textContent); U.toast('Copied.');
+          } }),
+        el('button', { class: 'btn btn-sm', text: 'New code',
+          onclick: function () {
+            TS.store.setScorerCode(S.tid, TS.store.newCode()).then(function (made) {
+              box.textContent = made;
+              U.toast('New code. The old one stops working.');
+            }, function (e) { U.toast(e.message || 'Could not change it.', 'bad'); });
+          } })
+      ]));
+      rows.push(el('p', { class: 'tiny muted', text:
+        'A new code does not stop anybody already scoring — it only ' +
+        'changes what the next person has to type. Remove somebody from ' +
+        'the Firebase console, under tournaments › scorers.' }));
+    } else {
+      rows.push(el('p', { class: 'tiny muted', text:
+        'You can score this tournament. Only the organiser can change ' +
+        'the code or hand out access to the others.' }));
+    }
+
+    TS.store.scorerCode(S.tid).then(function (c) {
+      if (c) { box.textContent = c; return; }
+      if (!a.organiser) { box.textContent = '—'; return; }
+      /* A tournament that has never been shared has no code yet. Minting
+       * one on sight beats a button that says "make a code": there is no
+       * such thing as wanting a shared tournament without one. */
+      TS.store.setScorerCode(S.tid, TS.store.newCode()).then(function (made) {
+        box.textContent = made;
+      }, function () { box.textContent = '—'; });
+    });
+    return rows;
+  }
+
+  function joinPane(S, api, host, close) {
+    var rows = [];
+
+    if (S.tid) {
+      var code = U.input({ placeholder: 'Code', autocomplete: 'off',
+        autocapitalize: 'characters', spellcheck: 'false',
+        style: 'text-transform:uppercase;letter-spacing:.14em;font-weight:700' });
+      var who = U.input({ placeholder: 'Your name', autocomplete: 'off' });
+      var go = el('button', { class: 'btn btn-primary btn-lg btn-block',
+        text: 'Start scoring' });
+      go.onclick = function () {
+        go.disabled = true;
+        TS.store.joinTournament(S.tid, code.value, who.value).then(function () {
+          close();
+          U.toast('You can score this tournament now.');
+          api.render();
+        }, function (e) {
+          go.disabled = false;
+          U.toast((e && e.message) || 'That did not work.', 'bad');
+        });
+      };
+      rows.push(el('div', { class: 'card stack' }, [
+        el('div', { class: 'eyebrow', text: 'Scoring this tournament' }),
+        U.field('The code the organiser gave you', code),
+        U.field('Your name', who),
+        go
+      ]));
+      rows.push(el('p', { class: 'small muted', text:
+        'Without a code you can still watch all of it, live. The code is ' +
+        'only needed to change something.' }));
+    }
+
+    rows.push(el('div', { class: 'row', style: 'margin-top:4px' }, [
+      el('button', { class: 'btn btn-ghost btn-sm', text: 'I am the organiser',
+        onclick: function () { organiserPane(S, api, host, close); } })
+    ]));
+    return rows;
+  }
+
+  /* The organiser key is the one that lets somebody CREATE tournaments,
+   * so it is app-wide rather than per tournament, and typed once ever. */
+  function organiserPane(S, api, host, close) {
+    U.mount(host, [el('p', { class: 'muted', text: 'One moment…' })]);
+    TS.store.organiserClaimable().then(function (fresh) {
+      var key = U.input({ placeholder: fresh ? 'Make one up' : 'Organiser key',
+        autocomplete: 'off', spellcheck: 'false',
+        style: 'text-transform:uppercase;letter-spacing:.14em;font-weight:700' });
+      var who = U.input({ placeholder: 'Your name', autocomplete: 'off' });
+      var go = el('button', { class: 'btn btn-primary btn-lg btn-block',
+        text: fresh ? 'Set the key and start' : 'Unlock' });
+      go.onclick = function () {
+        go.disabled = true;
+        var p = fresh ? TS.store.claimOrganiser(key.value, who.value)
+                      : TS.store.joinOrganiser(key.value, who.value);
+        p.then(function () {
+          close();
+          U.toast('You are set up as an organiser.');
+          api.render();
+        }, function (e) {
+          go.disabled = false;
+          U.toast((e && e.message) || 'That did not work.', 'bad');
+        });
+      };
+      U.mount(host, [
+        fresh ? U.banner('Nobody has set this up yet, so the first key ' +
+          'typed here becomes the organiser key. Do it now, before the ' +
+          'link goes anywhere.', 'warn') : null,
+        el('div', { class: 'card stack' }, [
+          el('div', { class: 'eyebrow', text: 'Organiser' }),
+          U.field(fresh ? 'A key only you will know' : 'The organiser key', key),
+          U.field('Your name', who),
+          go
+        ]),
+        el('p', { class: 'small muted', text: fresh
+          ? 'An organiser can create tournaments and score every one of ' +
+            'them. Each tournament then gets its own code for the people ' +
+            'scoring it.'
+          : 'This is not the code for one tournament — it is the key ' +
+            'that lets you create them. If you were given a short code ' +
+            'for one tournament, go back and use that instead.' }),
+        el('div', { class: 'row' }, [
+          el('button', { class: 'btn btn-ghost btn-sm', text: 'Back',
+            onclick: function () { paintAccess(S, api, host, close); } })
+        ])
+      ]);
+    });
+  }
+
   TS.extras = {
     leaderboard: leaderboard, timeline: timeline, bigScreen: bigScreen,
-    dataSheet: dataSheet, playerRows: playerRows, feedItems: feedItems
+    dataSheet: dataSheet, playerRows: playerRows, feedItems: feedItems,
+    accessSheet: accessSheet
   };
 
 })(window.TS = window.TS || {});

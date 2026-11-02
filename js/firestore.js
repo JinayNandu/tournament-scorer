@@ -33,6 +33,10 @@
   var PARTS = [
     { file: 'firebase-app-compat.js',
       sri: 'sha512-VPHBBOy7CWRw8PTmCpGrYD0nddvWyiBeEADlgzVem9eLZPVO/e96nYujVf9NVLYLsFlPSjkRyoOep+NNLu8BXg==' },
+    /* Rules cannot tell two phones apart unless they have signed in, so
+     * the auth SDK is not optional once there are roles. */
+    { file: 'firebase-auth-compat.js',
+      sri: 'sha512-3cqk/DPTFXaLj0gVaBHoRiepOCPMd0YBVYmoxzN6nWy2QH3v5hwqq4JC8LMInZd+MFQe60aF130v8x9sYE7czA==' },
     { file: 'firebase-firestore-compat.js',
       sri: 'sha512-NMmOM0hMoueUujkZfP+wQcGwP11rg9cSEDgwh/Dz1wbgG2qhQEcecO6zLzM1Kfk212xuJ0XdLsSsIM2kboiqXg==' }
   ];
@@ -47,6 +51,61 @@
     var c = config();
     return !!(c && c.apiKey && c.projectId);
   }
+
+  /* ---------------------------------------------------- who you are --- */
+
+  /* Everybody signs in ANONYMOUSLY, viewers included - invisibly, with
+   * nothing to type and no account to make. It costs a viewer nothing and
+   * it is the only way the rules get a uid to hang membership on. It is
+   * not an identity: it is a handle on this browser. Clearing site data
+   * loses it, and that costs a scorer one re-entry of the code.
+   *
+   * Two kinds of membership, because a tournament has two kinds of staff:
+   *
+   *   organisers/{uid}                 may create tournaments and run all
+   *                                    of them. One key, typed once, ever.
+   *   tournaments/{tid}/scorers/{uid}  may score THAT tournament. A code
+   *                                    per tournament, so handing one
+   *                                    event over does not hand over the
+   *                                    rest, and last month's scorers do
+   *                                    not still have the keys. */
+  var me = { uid: null, organiser: false, scorerOf: {} };
+
+  /* Pure, so the one line that decides whether somebody may score can be
+   * tested without a network, a project, or a code to type into it. */
+  function roleOf(state, tid) {
+    if (!state || !state.uid) return 'viewer';
+    if (state.organiser) return 'admin';
+    if (tid && state.scorerOf && state.scorerOf[tid]) return 'admin';
+    return 'viewer';
+  }
+
+  /* A code is read off one phone and typed into another, standing beside
+   * a court in a noisy hall. 0/O and 1/I/L are left out so nobody has to
+   * ask which one it was, and the vowels with them so it cannot land on a
+   * word. Anything outside this set in a typed code is a misreading of a
+   * character that was never in it, so normCode does not try to rescue
+   * it - it just strips the spaces and dashes people add. */
+  var ALPHABET = 'BCDFGHJKMNPQRSTVWXZ23456789';
+
+  function makeCode(n, rand) {
+    var out = '', i;
+    n = n || 6;
+    for (i = 0; i < n; i++) {
+      var r = rand ? rand() : Math.random();
+      out += ALPHABET.charAt(Math.floor(r * ALPHABET.length) % ALPHABET.length);
+    }
+    return out;
+  }
+
+  function normCode(s) {
+    return String(s == null ? '' : s).toUpperCase().replace(/[^0-9A-Z]/g, '');
+  }
+
+  function organiserPath(uid) { return 'organisers/' + uid; }
+  function scorerPath(tid, uid) { return 'tournaments/' + tid + '/scorers/' + uid; }
+  function codePath(tid) { return 'tournaments/' + tid + '/access/code'; }
+  var CONFIG_PATH = 'access/config';
 
   /* ------------------------------------------------------ pure helpers -- */
 
@@ -228,13 +287,148 @@
        * unless told to drop it. settings() throws if anything has already
        * touched the database, which on a second call is exactly right. */
       try { fs.settings({ ignoreUndefinedProperties: true }); } catch (e) {}
-      return {
-        doc: function (path) { return wrapDoc(fs, path); },
-        collection: function (path) { return wrapQuery(fs.collection(path), path); }
-      };
+      store = fs;
+      return signIn(fb).then(function (uid) {
+        me.uid = uid || null;
+        return uid ? exists(fs, organiserPath(uid)) : false;
+      }, function () {
+        /* Anonymous sign-in off in the console, or no network for it.
+         * Reads still work under rules that allow them, so the right
+         * thing is to carry on as a viewer rather than show nothing. */
+        return false;
+      }).then(function (org) {
+        me.organiser = !!org;
+        return {
+          doc: function (path) { return wrapDoc(fs, path); },
+          collection: function (path) { return wrapQuery(fs.collection(path), path); }
+        };
+      });
     }, function (e) {
       if (window.console && console.warn) console.warn('[firestore]', e);
       return null;
+    });
+  }
+
+  /* ------------------------------------------------------ the verbs --- */
+
+  var store = null;
+
+  function signIn(fb) {
+    if (!fb.auth) return Promise.resolve(null);
+    var auth = fb.auth();
+    if (auth.currentUser) return Promise.resolve(auth.currentUser.uid);
+    return withTimeout(auth.signInAnonymously(), READ_MS, 'sign-in')
+      .then(function (cred) {
+        return (cred && cred.user && cred.user.uid) ||
+               (auth.currentUser && auth.currentUser.uid) || null;
+      });
+  }
+
+  function exists(fs, path) {
+    return withTimeout(fs.doc(path).get(), READ_MS, path)
+      .then(function (s) { return !!(s && s.exists); }, function () { return false; });
+  }
+
+  /* Asked again whenever a tournament is opened, because being a scorer
+   * is per tournament. Being an organiser is not, so it is only looked up
+   * once, at connect, and after a join. */
+  function refreshRole(tid) {
+    if (!store || !me.uid) return Promise.resolve(roleOf(me, tid));
+    if (!tid) return Promise.resolve(roleOf(me, null));
+    if (me.organiser) return Promise.resolve('admin');
+    return exists(store, scorerPath(tid, me.uid)).then(function (yes) {
+      me.scorerOf[tid] = yes;
+      return roleOf(me, tid);
+    });
+  }
+
+  /* THE CODE IS NEVER CHECKED HERE. The client cannot read it - the rules
+   * see to that - so joining is an ordinary write that the server accepts
+   * or refuses, and a refusal IS a wrong code. Checking in the page would
+   * mean shipping the code to everyone who opens it. */
+  function claim(path, code, name) {
+    if (!store) return Promise.reject({ code: 'unavailable', message: 'Not connected.' });
+    if (!me.uid) {
+      return Promise.reject({ code: 'unauthenticated',
+        message: 'This phone could not sign in, so it cannot be given scoring access. Check that Anonymous sign-in is on in the Firebase console.' });
+    }
+    var c = normCode(code);
+    if (!c) return Promise.reject({ code: 'invalid_argument', message: 'Type the code first.' });
+    return withTimeout(store.doc(path).set({
+      code: c, name: String(name || '').slice(0, 40), at: Date.now()
+    }), WRITE_MS, path).then(function () { return true; }, function (e) {
+      var n = normError(e);
+      if (n.code === 'permission_denied') {
+        throw { code: 'wrong_code',
+                message: 'That code was not right. Check it with the organiser.' };
+      }
+      throw n;
+    });
+  }
+
+  function joinTournament(tid, code, name) {
+    return claim(scorerPath(tid, me.uid), code, name).then(function () {
+      me.scorerOf[tid] = true;
+      return 'admin';
+    });
+  }
+
+  function joinOrganiser(code, name) {
+    return claim(organiserPath(me.uid), code, name).then(function () {
+      me.organiser = true;
+      return 'admin';
+    });
+  }
+
+  /* An organiser needs to SEE the code to read it out; the rules let a
+   * member read it and nobody else. A tournament with no code document
+   * yet has never been shared, which is not an error - it is the state
+   * every tournament starts in. */
+  function scorerCode(tid) {
+    if (!store) return Promise.resolve(null);
+    return withTimeout(store.doc(codePath(tid)).get(), READ_MS, codePath(tid))
+      .then(function (s) {
+        return (s && s.exists && s.data() && s.data().scorerCode) || null;
+      }, function () { return null; });
+  }
+
+  function setScorerCode(tid, code) {
+    if (!store) return Promise.reject({ code: 'unavailable', message: 'Not connected.' });
+    var c = normCode(code) || makeCode(6);
+    return withTimeout(store.doc(codePath(tid)).set({ scorerCode: c, at: Date.now() }),
+      WRITE_MS, codePath(tid)).then(function () { return c; }, failed);
+  }
+
+  /* The first phone to open a brand new database sets the organiser key,
+   * because the alternative is a console step done before the app has
+   * ever run and a typo nobody can diagnose. The window in which somebody
+   * else could claim it is the window before the link has been given to
+   * anybody, so in practice it is shut. The rules refuse a second claim. */
+  function organiserClaimable() {
+    if (!store) return Promise.resolve(false);
+    return exists(store, CONFIG_PATH).then(function (yes) { return !yes; });
+  }
+
+  function claimOrganiser(code, name) {
+    if (!store || !me.uid) {
+      return Promise.reject({ code: 'unavailable', message: 'Not connected.' });
+    }
+    var c = normCode(code);
+    if (c.length < 4) {
+      return Promise.reject({ code: 'invalid_argument',
+        message: 'Make the organiser key at least four characters.' });
+    }
+    /* MEMBERSHIP FIRST, THEN THE KEY. The rules let any signed-in phone
+     * become an organiser while no key exists, and shut that door the
+     * moment one does. Done the other way round, a failure between the
+     * two writes would leave a database holding a key that nobody holds
+     * and no way left to set one - locked, permanently, with nothing on
+     * screen to say why. This order's worst case is a database with an
+     * organiser and no key yet, which is simply the state before the
+     * second write and is fixed by trying again. */
+    return joinOrganiser(c, name).then(function () {
+      return withTimeout(store.doc(CONFIG_PATH).set({ organiserCode: c, at: Date.now() }),
+        WRITE_MS, CONFIG_PATH).then(function () { return 'admin'; }, failed);
     });
   }
 
@@ -242,6 +436,19 @@
     version: VERSION,
     configured: configured,
     connect: connect,
+    uid: function () { return me.uid; },
+    isOrganiser: function () { return me.organiser; },
+    refreshRole: refreshRole,
+    joinTournament: joinTournament,
+    joinOrganiser: joinOrganiser,
+    organiserClaimable: organiserClaimable,
+    claimOrganiser: claimOrganiser,
+    scorerCode: scorerCode,
+    setScorerCode: setScorerCode,
+    makeCode: makeCode,
+    normCode: normCode,
+    // exposed for selftest
+    _roleOf: roleOf,
     // exposed for selftest
     _normError: normError,
     _leasePath: leasePath,

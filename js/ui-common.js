@@ -697,6 +697,15 @@
     return btn;
   }
 
+  /* A control a viewer must not be offered. Hiding it is politeness
+   * rather than access control - the store refuses the write either way -
+   * but a screen of buttons that all refuse is worse than a screen
+   * without them, and it is how somebody concludes the app is broken. */
+  function adminOnly(node) {
+    if (TS.store && TS.store.canEdit && !TS.store.canEdit()) return null;
+    return node;
+  }
+
   applyTheme();
 
   TS.ui = {
@@ -711,7 +720,7 @@
     categoryBuilder: categoryBuilder, catPickers: catPickers,
     gameScoring: gameScoring, scoringOverrideFor: scoringOverrideFor,
     gameScoringOf: gameScoringOf,
-    colorFor: colorFor, PALETTE: PALETTE,
+    colorFor: colorFor, PALETTE: PALETTE, adminOnly: adminOnly,
     theme: theme, setTheme: setTheme, applyTheme: applyTheme,
     themePicker: themePicker, themeToggle: themeToggle,
     resolvedTheme: resolvedTheme, onTheme: onTheme,

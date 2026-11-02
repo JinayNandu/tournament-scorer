@@ -110,13 +110,25 @@
       });
   }
 
+  /* A viewer cannot score at all, and that is settled before the lease is
+   * ever asked - the store does not even ask for one. The two must not be
+   * confused on screen: "another phone is scoring this" has a way out and
+   * "you are watching" does not. */
+  function watching() { return !TS.store.canEdit(); }
+
   /* Until the lease answers, assume we may score. On a hall wifi that round
    * trip can take a second or two, and a scoreboard that swallows the first
    * few taps is worse than the rare double-scored rally the lease prevents. */
-  function canWrite() { return !lease.resolved || lease.held || lease.override; }
+  function canWrite() {
+    if (watching()) return false;
+    return !lease.resolved || lease.held || lease.override;
+  }
 
-  /* The lease has answered and it is not ours. */
-  function readOnly() { return lease.resolved && !lease.held && !lease.override; }
+  /* The lease has answered and it is not ours. A viewer is never in this
+   * state, so the take-over banner can never be shown to one. */
+  function readOnly() {
+    return !watching() && lease.resolved && !lease.held && !lease.override;
+  }
 
   function takeOver(S, api) {
     U.confirmSheet({
@@ -153,6 +165,10 @@
   }
 
   function push(S, api, type, payload) {
+    if (watching()) {
+      U.toast('You are watching this tournament. Ask the organiser for the scoring code.', 'warn');
+      return;
+    }
     if (!canWrite()) {
       U.toast('Someone else is scoring this game. Take over first.', 'warn');
       return;
@@ -347,7 +363,8 @@
     var bn = banner(S, api, sum);
     var tall = bn && (bn.className || '').indexOf('bb-tall') >= 0;
 
-    var board = el('div', { class: 'board' + (tall ? ' board-tall-banner' : '') }, [
+    var board = el('div', { class: 'board' + (tall ? ' board-tall-banner' : '') +
+                                   (watching() ? ' board-watch' : '') }, [
       topRow(S, api, sum),
       matchStrip(S, api),
       (engine === 'rally' || engine === 'tennis') ? zones(S, api, sum, sides)
@@ -471,7 +488,12 @@
     /* Nothing but the title up here. Every control used to sit in one of
      * the four corners, which meant hunting for them one at a time; they
      * are all in one row along the bottom now. */
-    return el('div', { class: 'board-top' }, [title]);
+    return el('div', { class: 'board-top' }, [
+      title,
+      /* Said once, small, in the strip that already holds the words.
+       * Never over the score, which is the thing they opened it for. */
+      watching() ? el('span', { class: 'bt-watch', text: 'Watching' }) : null
+    ]);
   }
 
   /* Which team shows on the left. Players change ends mid-game and the
@@ -1089,7 +1111,9 @@
   function banner(S, api, sum) {
     return endBanner(S, api, sum)
         || readOnlyBanner(S, api)         // another phone has this match
-        || serveBanner(S, api, sum)       // names missing, or the first serve
+        /* "Who is playing? Add names" asks a viewer for something they
+         * cannot give, and the serve prompt is for whoever is scoring. */
+        || (watching() ? null : serveBanner(S, api, sum))
         || detailStrip(S, api, sum)       // how was that point won?
         || restBanner(S, api, sum);       // deuce, change of ends
   }
@@ -1120,7 +1144,9 @@
           el('div', { class: 'bb-sub',
             text: (sum.resultText ? sum.resultText + ' · ' : '') + sum.line })
         ]),
-        el('button', { class: 'board-btn', text: 'Undo',
+        /* A viewer is told who won and may move on to the next game;
+         * taking the result back is not theirs to offer. */
+        watching() ? null : el('button', { class: 'board-btn', text: 'Undo',
           onclick: function () { undo(S, api); } }),
         el('button', { class: 'board-btn', text: 'Next game',
           onclick: function () { nextRubber(S, api); } })
@@ -1193,7 +1219,7 @@
 
     // Tap the rules to change them for THIS game only - "we played this
     // one to 30" should not mean redoing the tournament settings.
-    var noteEl = (engine === 'rally' || engine === 'tennis')
+    var noteEl = (engine === 'rally' || engine === 'tennis') && !watching()
       ? el('button', { class: 'board-note board-note-tap',
           text: note + '  ·  change',
           onclick: function () {
@@ -1203,7 +1229,7 @@
           } })
       : el('div', { class: 'board-note', text: note });
 
-    var controls = [
+    var controls = watching() ? watchControls(S, api, order) : [
       el('button', {
         class: 'board-ctl',
         disabled: !canWrite() || !E.lastUndoableId(local.events),
@@ -1273,6 +1299,36 @@
       noteEl,
       el('div', { class: 'board-controls' }, controls)
     ]);
+  }
+
+  /* A viewer's cluster. The controls that would refuse are GONE, not
+   * disabled: five dead buttons say the app is broken, not that you are
+   * watching. Swapping sides stays, because it only reorders this
+   * device's view - a spectator standing at the other end of the court
+   * wants it exactly as much as a scorer does. */
+  function watchControls(S, api, order) {
+    function out() {
+      leave(S, api);
+      if (order.length > 1) api.go('fixture', { fid: S.fid, meeting: true });
+      else { api.openFixture(null); api.go('hub', { tab: 'matches' }); }
+    }
+    return [
+      el('button', {
+        class: 'board-ctl',
+        title: 'Put the other team on the left',
+        onclick: function () { setFlipped(S.rid, !isFlipped(S.rid)); api.render(); }
+      }, ctl('⇄', 'Swap sides')),
+      /* Always offered, on every backend. A scorer who has not been given
+       * access yet taps a dead zone and gets nothing back at all, and the
+       * sheet behind this is the only thing that explains why - on the
+       * artifact it is also the only place the share menu gets named. */
+      el('button', {
+        class: 'board-ctl',
+        onclick: function () { TS.extras.accessSheet(S, api); }
+      }, ctl('⊕', 'I am scoring')),
+      el('button', { class: 'board-ctl board-ctl-done',
+        onclick: out }, ctl('✓', 'Done'))
+    ];
   }
 
   function undo(S, api) {

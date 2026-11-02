@@ -34,8 +34,8 @@
         ]);
       })),
       el('div', { class: 'row' }, [
-        el('button', { class: 'btn', text: 'Add teams',
-          onclick: function () { addSheet(S, api); } })
+        U.adminOnly(el('button', { class: 'btn', text: 'Add teams',
+          onclick: function () { addSheet(S, api); } }))
       ]),
       nextStep(S, api)
     ]);

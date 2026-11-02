@@ -2025,6 +2025,75 @@
     /* Firestore is a close enough relative of the Artifact db that the
      * wrapper over it is thin - which makes the few places the two disagree
      * the whole of the risk. These are those places. */
+    /* Who may write is the one thing in this app that is not a matter of
+     * taste, so the decision is a pure function and it is tested here
+     * rather than being discovered on a Sunday morning. */
+    describe('Who may score', function () {
+      var FS = TS.firestore;
+
+      it('nobody signed in is a viewer, whatever else is true', function () {
+        eq(FS._roleOf({ uid: null, organiser: true }, 't1'), 'viewer',
+           'the rules see a uid or they see nothing');
+      });
+
+      it('an organiser may score any tournament', function () {
+        eq(FS._roleOf({ uid: 'u1', organiser: true, scorerOf: {} }, 't9'), 'admin');
+      });
+
+      it('a scorer may score the one they were given', function () {
+        eq(FS._roleOf({ uid: 'u1', organiser: false, scorerOf: { t1: true } }, 't1'),
+           'admin');
+      });
+
+      it('and NOT the one next door', function () {
+        eq(FS._roleOf({ uid: 'u1', organiser: false, scorerOf: { t1: true } }, 't2'),
+           'viewer',
+           'per tournament is the whole point: handing over one event ' +
+           'must not hand over the rest');
+      });
+
+      it('a scorer is still only a viewer of the list itself', function () {
+        eq(FS._roleOf({ uid: 'u1', organiser: false, scorerOf: { t1: true } }, null),
+           'viewer',
+           'creating a tournament is the organiser key, not a scoring code');
+      });
+
+      it('somebody with no code at all watches', function () {
+        eq(FS._roleOf({ uid: 'u1', organiser: false, scorerOf: {} }, 't1'), 'viewer');
+      });
+
+      /* A code gets read off one phone and typed into another across a
+       * hall. Every character it can contain has to survive that. */
+      it('a code carries nothing that can be misread', function () {
+        var i, c = FS.makeCode(400);
+        eq(c.length, 400);
+        eq(/[01OIL]/.test(c), false, 'no zero/O and no one/I/L');
+        eq(/[AEIOU]/.test(c), false, 'and it cannot spell anything');
+      });
+
+      it('a code is the length asked for', function () {
+        eq(FS.makeCode(6).length, 6);
+        eq(FS.makeCode().length, 6);
+      });
+
+      it('the top of the random range does not fall off the alphabet', function () {
+        eq(FS.makeCode(4, function () { return 0.999999999; }).length, 4,
+           'Math.floor(1 * n) would index one past the end and give ""');
+        eq(FS.makeCode(4, function () { return 0; }).length, 4);
+      });
+
+      it('typing it back in survives spaces, dashes and lower case', function () {
+        eq(FS.normCode(' 7k2-p3 '), '7K2P3');
+        eq(FS.normCode(null), '');
+      });
+
+      it('but a character that was never in a code stays wrong', function () {
+        eq(FS.normCode('7K2O'), '7K2O',
+           'O is not in the alphabet, so it cannot match - quietly ' +
+           'rewriting it to a zero would unlock a code nobody set');
+      });
+    });
+
     describe('The shared backend', function () {
       var FS = TS.firestore;
 

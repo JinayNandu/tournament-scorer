@@ -428,6 +428,21 @@ table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
   padding: 8px max(12px, env(safe-area-inset-right,0px)) 8px max(12px, env(safe-area-inset-left,0px));
   border-bottom: 1px solid var(--bd-rule); flex: none;
 }
+/* A code is read off this screen and typed into another phone across a
+   hall, so it is set in the biggest type on the page and spaced out. */
+.codebox {
+  font-stretch: 125%; font-weight: 900; font-size: 38px; line-height: 1.1;
+  letter-spacing: .16em; text-align: center; padding: 10px 0 6px;
+  font-variant-numeric: tabular-nums; word-break: break-all;
+}
+
+/* A viewer's board says so here, in the strip that already holds words,
+   and nowhere else: a banner would float over the score. */
+.board-top .bt-watch {
+  flex: none; font-size: 10px; font-weight: 800; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--bd-ink-3);
+  border: 1px solid var(--bd-rule); border-radius: 999px; padding: 3px 9px;
+}
 .board-top .bt-title { flex: 1; min-width: 0; font-size: 12.5px; color: var(--bd-ink-3);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .board-top .bt-jump {
@@ -491,6 +506,11 @@ table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
 .zone.serving { background: var(--bd-zone-serve);
   background: color-mix(in srgb, var(--team, transparent) var(--bd-wash-serve), var(--bd-zone-serve)); }
 .zone[disabled] { cursor: default; opacity: .55; }
+/* A board somebody is WATCHING has not locked them out of anything - the
+   score is the whole reason they opened it. The dimming above is for a
+   scorer whose court another phone is holding, which is a state they can
+   do something about; here it would fade the one thing they came for. */
+.board-watch .zone[disabled] { opacity: 1; }
 /* Every colour in PALETTE clears 4.5:1 against white, which is what lets
    the name sit ON the team's colour in both themes rather than needing a
    light treatment and a dark one. */

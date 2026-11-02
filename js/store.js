@@ -45,8 +45,61 @@
   var db = null;
   var user = null;
   var userId = null;
-  var canWrite = true;
   var readyPromise = null;
+
+  /* ------------------------------------------------------------ roles -- */
+
+  /* Two roles, and the whole difference is whether a write is allowed.
+   *
+   *   admin   may change anything: create, score, correct, delete.
+   *   viewer  may read all of it, live, and write none of it.
+   *
+   * Each backend answers this differently, and NONE of the answers is the
+   * user interface. Hiding a button is politeness; it is not access
+   * control, and a hidden button is one forgotten `if` away from being
+   * tapped.
+   *
+   *   device     always admin. It is your own phone, nobody else can see
+   *              it, and there is nothing to protect it from.
+   *   artifact   claude.ai has already decided. A Viewer or Commenter on
+   *              the share cannot write the db whatever this app believes,
+   *              so `user.can('data.write')` IS the answer, and the Share
+   *              menu is where it gets changed.
+   *   firestore  a scoring code per tournament, checked by the rules on
+   *              the server. See firestore.js and tools/firestore.rules.
+   *
+   * ASSUME ADMIN UNTIL TOLD OTHERWISE. The answer arrives over a network,
+   * and a scoreboard that swallows the first taps of a game is worse than
+   * one that lets a viewer tap and then says the write was refused. Same
+   * reasoning as the lease, and for the same reason. */
+  var role = 'admin';
+  var roleWatchers = [];
+
+  function canEdit() { return role === 'admin'; }
+
+  function setRole(next) {
+    if (next !== 'admin' && next !== 'viewer') return role;
+    if (next === role) return role;
+    role = next;
+    roleWatchers.forEach(function (cb) { try { cb(role); } catch (e) { report(e); } });
+    return role;
+  }
+
+  function onRole(cb) { roleWatchers.push(cb); cb(role); }
+
+  /* A VIEWER'S WRITE STOPS HERE, not in a screen. Every write mirrors to
+   * localStorage before it goes anywhere, so that a dropped connection is
+   * survivable - which for a viewer is exactly the wrong thing: their own
+   * phone would accept the change, show it back to them, and they would
+   * spend the afternoon looking at a tournament nobody else can see.
+   * Refusing at the store also means a control some screen forgot to hide
+   * costs a toast rather than a divergence. */
+  function refuse() {
+    return Promise.reject({
+      code: 'permission_denied',
+      message: 'You are watching this tournament. Ask the organiser for the scoring code if you need to change something.'
+    });
+  }
 
   /* ----------------------------------------------------- local emitter -- */
 
@@ -149,6 +202,7 @@
       db = shared;
       mode = 'cloud';
       backend = 'firestore';
+      setRole(TS.firestore.isOrganiser() ? 'admin' : 'viewer');
       return info();
     });
     return readyPromise;
@@ -193,7 +247,7 @@
             if (!user.can) return null;
             return user.can('data.write');
           })
-          .then(function (w) { if (w === false) canWrite = false; })
+          .then(function (w) { if (w === false) setRole('viewer'); })
           .catch(function () {})
           .then(info);
       }).catch(function () {
@@ -205,7 +259,7 @@
 
   function info() {
     return { mode: mode, backend: backend, runtime: runtime,
-             sharedFailed: sharedFailed, canWrite: canWrite,
+             sharedFailed: sharedFailed, role: role, canEdit: canEdit(),
              userId: userId, clientId: clientId() };
   }
 
@@ -220,6 +274,84 @@
       try { window.localStorage.setItem(LS_PREFIX + 'clientId', _clientId); } catch (e) {}
     }
     return _clientId;
+  }
+
+  /* ------------------------------------------------------ the access -- */
+
+  /* Being a scorer is PER TOURNAMENT on the open backend, so opening one
+   * re-asks. Being an organiser is not, so it is settled once at connect.
+   * The other two backends have one answer for everything and ignore the
+   * tournament entirely. */
+  function useTournament(tid) {
+    if (backend !== 'firestore' || !TS.firestore) return Promise.resolve(role);
+    return TS.firestore.refreshRole(tid || null)
+      .then(function (r) { return setRole(r); }, function () { return role; });
+  }
+
+  /* What the screens may OFFER, which differs by backend. Asking this
+   * once beats testing the backend's name in five places and getting the
+   * fifth one wrong. */
+  function access() {
+    return {
+      role: role,
+      canEdit: canEdit(),
+      backend: backend,
+      /* Only the open backend has codes of its own. On the artifact,
+       * claude.ai's Share menu already decides and this app must not
+       * pretend otherwise; on a lone device there is nobody to share
+       * with. */
+      codes: backend === 'firestore',
+      /* An organiser runs every tournament and mints the codes; a
+       * scorer can only score the one they were given. On the other
+       * two backends there is no such distinction to draw. */
+      organiser: backend === 'firestore' && TS.firestore
+        ? TS.firestore.isOrganiser() : canEdit(),
+      shared: mode === 'cloud'
+    };
+  }
+
+  function noCodes() {
+    return Promise.reject({ code: 'unsupported',
+      message: 'This copy has no scoring codes of its own.' });
+  }
+
+  function joinTournament(tid, code, name) {
+    if (backend !== 'firestore') return noCodes();
+    return TS.firestore.joinTournament(tid, code, name)
+      .then(function (r) { return setRole(r); });
+  }
+
+  function joinOrganiser(code, name) {
+    if (backend !== 'firestore') return noCodes();
+    return TS.firestore.joinOrganiser(code, name)
+      .then(function (r) { return setRole(r); });
+  }
+
+  function claimOrganiser(code, name) {
+    if (backend !== 'firestore') return noCodes();
+    return TS.firestore.claimOrganiser(code, name)
+      .then(function (r) { return setRole(r); });
+  }
+
+  function organiserClaimable() {
+    if (backend !== 'firestore') return Promise.resolve(false);
+    return TS.firestore.organiserClaimable();
+  }
+
+  function scorerCode(tid) {
+    if (backend !== 'firestore') return Promise.resolve(null);
+    return TS.firestore.scorerCode(tid);
+  }
+
+  /* Minting one is a write, so it is an admin's act like any other. */
+  function setScorerCode(tid, code) {
+    if (!canEdit()) return refuse();
+    if (backend !== 'firestore') return noCodes();
+    return TS.firestore.setScorerCode(tid, code);
+  }
+
+  function newCode() {
+    return TS.firestore ? TS.firestore.makeCode(6) : null;
   }
 
   /* ------------------------------------------------------ write queueing -- */
@@ -312,6 +444,7 @@
   }
 
   function set(path, data) {
+    if (!canEdit()) return refuse();
     return queued(path, function () {
       localSet(path, data);                 // always mirror, so a drop is survivable
       if (mode !== 'cloud') { emit(path); return Promise.resolve(); }
@@ -329,6 +462,7 @@
    * scorers write {rubberSummary: {<their id>: ...}} into one fixture
    * document without clobbering each other. */
   function update(path, patch) {
+    if (!canEdit()) return refuse();
     return queued(path, function () {
       var cur = localGet(path) || {};
       localSet(path, deepMerge(cur, patch));
@@ -345,6 +479,7 @@
   }
 
   function del(path) {
+    if (!canEdit()) return refuse();
     return queued(path, function () {
       localDel(path);
       if (mode !== 'cloud') { emit(path); return Promise.resolve(); }
@@ -403,7 +538,11 @@
   /* The store's own cooperative lease. Not a security boundary - it stops
    * two well-behaved scorers fighting over one rubber, which is the actual
    * problem. Local mode has one writer by definition. */
+  /* A viewer never asks for the lease. Asking is a write, the rules
+   * would refuse it, and the refusal would arrive looking exactly like
+   * "another phone is scoring this" - which is the one thing it is not. */
   function acquire(path, opts) {
+    if (!canEdit()) return Promise.resolve({ acquired: false, viewer: true });
     if (mode !== 'cloud') return Promise.resolve({ acquired: true, local: true });
     return db.doc(path).acquire({
       holder: opts.holder, ttlMs: opts.ttlMs || 45000
@@ -513,7 +652,15 @@
     clientId: clientId,
     mode: function () { return mode; },
     backend: function () { return backend; },
-    canWrite: function () { return canWrite; },
+    canEdit: canEdit,
+    role: function () { return role; },
+    access: access,
+    useTournament: useTournament,
+    joinTournament: joinTournament, joinOrganiser: joinOrganiser,
+    claimOrganiser: claimOrganiser, organiserClaimable: organiserClaimable,
+    scorerCode: scorerCode, setScorerCode: setScorerCode, newCode: newCode,
+    setRole: setRole,
+    onRole: onRole,
     userId: function () { return userId; },
     get: get,
     set: set,

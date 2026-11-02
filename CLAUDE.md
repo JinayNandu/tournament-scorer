@@ -742,8 +742,78 @@ rather than Google's own gstatic because it is an origin the Artifact
 runtime allows, which keeps one code path working in both places.
 
 `tools/firestore.rules` is the matching rules file, and it is worth
-reading: it leaves the tournaments open to anyone holding the link, for
-reasons it sets out.
+reading on its own account.
+
+---
+
+## Who may write: admin and viewer
+
+**Anyone with the link can WATCH. Writing takes membership.** That is the
+whole feature, and the three places it is decided are not the same place:
+
+| | who decides | how it changes |
+|---|---|---|
+| device | nobody; always admin | there is nobody else on the phone |
+| artifact | claude.ai | the page's own Share menu |
+| firestore | `tools/firestore.rules` | a code, typed once per phone |
+
+**Hiding a button is politeness, not access control.** `TS.store.canEdit()`
+is the single answer and `set`, `update`, `del` and `setScorerCode` refuse
+without it - BEFORE the localStorage mirror, which is the part that
+matters. Every write mirrors locally first so a dropped connection is
+survivable; for a viewer that would be exactly wrong, because their own
+phone would accept the change, show it back to them, and they would spend
+the afternoon looking at a tournament nobody else can see. Refusing at the
+store also means a control some screen forgot to hide costs a toast
+instead of a divergence. `U.adminOnly(node)` does the hiding, and it is
+greppable for that reason.
+
+**ASSUME ADMIN UNTIL TOLD OTHERWISE.** The role arrives over a network.
+A board that swallows the first taps of a game is worse than one that
+lets somebody tap and then says the write was refused - the same
+reasoning as the lease, and `app.js` re-renders on `onRole` when the real
+answer lands.
+
+**Two codes, because a tournament has two kinds of staff.** An ORGANISER
+key is app-wide and is what lets somebody create tournaments at all; a
+SCORING code is per tournament. That is why handing one event to somebody
+does not hand over the rest, and why last month's scorers do not still
+have the keys. `access()` reports `organiser` separately from `canEdit`
+for the one screen that needs the difference.
+
+**The code is never checked in the page.** The client cannot read it -
+the rules see to that - so joining is an ordinary write that the server
+accepts or refuses, and a refusal IS a wrong code. A check in JavaScript
+would mean shipping the code to everyone who opens the app, which is not
+a check at all. The code does end up stored in the membership document,
+which is why those documents are readable only by their owner and by
+organisers; do not loosen that for a "who is scoring" list.
+
+**Anonymous sign-in is not optional.** Rules cannot tell two phones apart
+without a uid, so everybody signs in anonymously on load, viewers
+included, invisibly. Forgetting to enable it in the console is the one
+setup mistake with no symptom but "nothing works".
+
+**The membership write comes BEFORE the organiser key.** The other way
+round, a failure between the two leaves a database with a key nobody
+holds and no way left to set one - locked, permanently, with nothing on
+screen to say why.
+
+**A viewer takes no lease.** Asking for one is a write; the refusal would
+arrive looking exactly like "another phone is scoring this", which is the
+one thing it is not. `acquire` answers `{acquired: false, viewer: true}`
+without a round trip, `watching()` is checked before the lease everywhere
+on the board, and `readOnly()` excludes viewers so the Take over banner
+can never be shown to somebody who cannot take over.
+
+**A watched board is not a locked-out board.** `.zone[disabled]` dims to
+.55 so a scorer can see that another phone holds the court - a state they
+can do something about. `.board-watch` puts that back to 1, because for a
+spectator the score is the entire reason the screen is open and fading it
+is exactly backwards. The viewer's cluster has the refusing controls
+REMOVED rather than disabled: five dead buttons say the app is broken,
+not that you are watching.
+
 
 ---
 
@@ -769,7 +839,7 @@ js/ui-stages.js   later rounds, brackets    js/ui-views.js    home, hub, table
 js/ui-score.js    every scoreboard          js/ui-settings.js change it after
 js/ui-extras.js   leaderboard, feed, big screen, backup
 js/ui-analysis.js the Analysis tab
-js/selftest.js    181 assertions over the pure modules
+js/selftest.js    192 assertions over the pure modules
 tools/            serve.pl, mkpages.pl, firestore.rules, shared-mode.js,
                   and the dev.html head/foot
 ```
@@ -790,7 +860,7 @@ cscript //E:JScript //Nologo "<scratchpad>\runtests.js" .
 Windows Script Host is an ES3 engine, so the runner shims the ES5 library
 methods and rewrites `.catch` / `.delete` (reserved words after a dot in
 ES3) before parsing. It loads only the DOM-free modules - `firestore`
-among them, for the lease and the error codes. **181 tests,
+among them, for the lease and the error codes. **192 tests,
 all green** as of the last change - bar three that assert frozen
 documents, which JScript cannot express and which pass in the browser.
 
@@ -882,7 +952,7 @@ courts, the match list (with a Suggest that fits the squads), teams and
 players, and redoing the draw. A single match can also be given its own
 target from the scoring screen, stored as `rubber.scoringOverride`.
 
-**181 tests green**, thirteen of them on the serve rotation alone and
+**189 tests green**, thirteen of them on the serve rotation alone and
 eleven on the shared backend.
 
 **Not built yet / known rough edges:**

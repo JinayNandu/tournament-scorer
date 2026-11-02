@@ -15,7 +15,11 @@
       ? el('div', { class: 'stack-s' }, S.tournaments.map(function (t) {
           return tournamentRow(t, S, api);
         }))
-      : el('div', { class: 'card stack welcome', style: 'text-align:center' }, [
+      /* A viewer looking at an empty list is not being invited to start
+       * something - they cannot - so the screen says what it is waiting
+       * for instead of offering a button that would be refused. */
+      : TS.store.canEdit()
+      ? el('div', { class: 'card stack welcome', style: 'text-align:center' }, [
           courtMark(),
           el('h2', { text: 'Start a tournament' }),
           el('p', { class: 'muted', text:
@@ -23,13 +27,20 @@
             'match can come later, or in the middle of one.' }),
           el('button', { class: 'btn btn-primary btn-lg', text: 'New tournament',
             onclick: function () { S.wizard = null; api.go('wizard'); } })
+        ])
+      : el('div', { class: 'card stack welcome', style: 'text-align:center' }, [
+          courtMark(),
+          el('h2', { text: 'Nothing on yet' }),
+          el('p', { class: 'muted', text:
+            'When the organiser starts a tournament it appears here, and ' +
+            'the scores update as they are played.' })
         ]);
 
     return el('div', {}, [
       api.topbar('Tournament Scorebook', modeLine(S), [
-        S.tournaments.length ? el('button', {
+        S.tournaments.length ? U.adminOnly(el('button', {
           class: 'btn btn-primary btn-sm', text: 'New',
-          onclick: function () { S.wizard = null; api.go('wizard'); } }) : null
+          onclick: function () { S.wizard = null; api.go('wizard'); } })) : null
       ]),
       el('div', { class: 'wrap stack' }, [
         S.info.sharedFailed ? U.banner(
@@ -44,6 +55,7 @@
         S.pending ? U.banner(S.pending + ' change' + (S.pending > 1 ? 's' : '') +
           ' waiting for the connection. They are safe on this device.', 'warn') : null,
         S.loading ? el('p', { class: 'muted', text: 'Loading...' }) : list,
+        watchingNote(S, api),
         el('div', { class: 'stack-s', style: 'margin-top:24px' }, [
           el('div', { class: 'eyebrow', text: 'Appearance' }),
           U.themePicker()
@@ -52,6 +64,26 @@
           el('button', { class: 'btn btn-ghost btn-sm', text: 'Self test',
             onclick: function () { api.go('selftest'); } })
         ])
+      ])
+    ]);
+  }
+
+  /* Somebody watching should be told so, once, where they will see it -
+   * and told what to do if they are actually here to score. A viewer who
+   * is not told simply finds that nothing they tap works. */
+  function watchingNote(S, api) {
+    if (TS.store.canEdit()) return null;
+    var a = TS.store.access();
+    return el('div', { class: 'card stack-s', style: 'margin-top:18px' }, [
+      el('div', { class: 'eyebrow', text: 'You are watching' }),
+      el('p', { class: 'small muted', text: a.codes
+        ? 'Scores update live as they are played. If you are one of the ' +
+          'scorers, the organiser has a code for you.'
+        : 'Scores update live as they are played. Scoring is given out ' +
+          'from the share menu of this page.' }),
+      el('div', { class: 'row' }, [
+        el('button', { class: 'btn btn-sm', text: 'I am scoring',
+          onclick: function () { TS.extras.accessSheet(S, api); } })
       ])
     ]);
   }
@@ -204,12 +236,14 @@
   function moreMenu(S, api) {
     U.sheet(S.tournament.name, function (close) {
       return [el('div', { class: 'stack-s' }, [
-        el('button', { class: 'btn btn-block', text: 'Settings',
-          onclick: function () { close(); TS.settings.sheet(S, api); } }),
+        U.adminOnly(el('button', { class: 'btn btn-block', text: 'Settings',
+          onclick: function () { close(); TS.settings.sheet(S, api); } })),
         el('button', { class: 'btn btn-block', text: 'Big screen',
           onclick: function () { close(); TS.extras.bigScreen(S, api); } }),
-        el('button', { class: 'btn btn-block', text: 'Backup',
-          onclick: function () { close(); TS.extras.dataSheet(S, api); } }),
+        U.adminOnly(el('button', { class: 'btn btn-block', text: 'Backup',
+          onclick: function () { close(); TS.extras.dataSheet(S, api); } })),
+        el('button', { class: 'btn btn-block', text: 'Who can score',
+          onclick: function () { close(); TS.extras.accessSheet(S, api); } }),
         el('button', { class: 'btn btn-block', text: 'All tournaments',
           onclick: function () { close(); api.go('home'); } }),
         el('div', { class: 'stack-s', style: 'margin-top:10px' }, [
@@ -230,7 +264,12 @@
   /* ---------------------------------------------------------- matches -- */
 
   function matchesTab(S, api) {
+    /* An empty screen invites the organiser to fill it and tells a viewer
+     * what it is waiting for. The same words cannot do both jobs. */
     if (S.entrants.length < 2) {
+      if (!TS.store.canEdit()) {
+        return U.empty('The teams', 'They appear here once the organiser has entered them.');
+      }
       return el('div', { class: 'card stack', style: 'text-align:center' }, [
         el('h2', { text: S.entrants.length ? 'One more team' : 'Add the teams' }),
         el('p', { class: 'muted', text:
@@ -241,6 +280,9 @@
     }
 
     if (!S.fixtures.length) {
+      if (!TS.store.canEdit()) {
+        return U.empty('The matches', 'They appear here as soon as the draw is made.');
+      }
       return el('div', { class: 'card stack', style: 'text-align:center' }, [
         el('h2', { text: 'Plan the rounds' }),
         el('p', { class: 'muted', text:
@@ -311,18 +353,20 @@
                 : (M.kindLabel((names.length && (S.tournament.config.tieTemplate.rubbers[0] || {}).kind) || 'team')
                    || 'Scored as one game') })
         ]),
-        el('button', { class: 'btn btn-sm', text: 'Change',
+        U.adminOnly(el('button', { class: 'btn btn-sm', text: 'Change',
           onclick: function () {
             TS.matches.setupMeeting(S, api, S.fixtures[0]);
-          } })
+          } }))
       ])
     ]));
 
-    out.push(el('div', { class: 'row', style: 'margin-top:8px' }, [
-      el('button', { class: 'btn',
-        text: S.fixtures.length ? 'Edit the rounds' : 'Plan the rounds',
-        onclick: function () { TS.matches.addSheet(S, api); } })
-    ]));
+    if (TS.store.canEdit()) {
+      out.push(el('div', { class: 'row', style: 'margin-top:8px' }, [
+        el('button', { class: 'btn',
+          text: S.fixtures.length ? 'Edit the rounds' : 'Plan the rounds',
+          onclick: function () { TS.matches.addSheet(S, api); } })
+      ]));
+    }
 
     /* Once a final exists there is nothing to come after it, so offering a
      * next stage would be nonsense. */
@@ -331,7 +375,9 @@
       return f.stageId === last.id && f.shortLabel === 'F';
     });
 
-    out.push(endsInFinal
+    /* The whole block is about changing the shape of the tournament, so
+     * it is not something a viewer is shown a disabled version of. */
+    if (TS.store.canEdit()) out.push(endsInFinal
       ? el('div', { class: 'card stack' }, [
           el('div', { class: 'eyebrow', text: 'The end' }),
           el('p', { class: 'small muted', text:
@@ -379,8 +425,8 @@
       el('div', { class: 'row' }, [
         el('div', { class: 'eyebrow', text: 'The groups' }),
         el('div', { class: 'spacer' }),
-        el('button', { class: 'btn btn-ghost btn-sm', text: 'Change',
-          onclick: function () { TS.matches.everyone(S, api); } })
+        U.adminOnly(el('button', { class: 'btn btn-ghost btn-sm', text: 'Change',
+          onclick: function () { TS.matches.everyone(S, api); } }))
       ])
     ].concat(groups.map(function (g) {
       var names = (g.entrantRefs || []).map(function (ref) {
@@ -463,11 +509,11 @@
                     text: api.sideLabel(f, 'away') }),
         meta.length ? el('div', { class: 'fx-meta' }, meta) : null
       ]),
-      el('button', {
+      U.adminOnly(el('button', {
         class: 'btn btn-ghost', style: 'padding:0 10px',
         'aria-label': 'Options', text: '⋮',
         onclick: function () { TS.matches.fixtureOptions(S, api, f); }
-      })
+      }))
     ]);
   }
 
@@ -751,14 +797,14 @@
     } else if (!S.rubbers.length) {
       body.push(el('div', { class: 'card stack', style: 'text-align:center' }, [
         el('p', { class: 'muted', text: 'No games in this match yet.' }),
-        el('button', { class: 'btn btn-primary', text: 'Add a game',
-          onclick: function () { TS.matches.addToMeeting(S, api, f); } })
+        U.adminOnly(el('button', { class: 'btn btn-primary', text: 'Add a game',
+          onclick: function () { TS.matches.addToMeeting(S, api, f); } }))
       ]));
     } else {
       body.push(el('div', { class: 'stack-s' }, S.rubbers.map(function (r) {
         return matchRow(S, api, f, r, count);
       })));
-      body.push(el('div', { class: 'row' }, [
+      if (TS.store.canEdit()) body.push(el('div', { class: 'row' }, [
         /* The names come first because they are what changes from one
          * match to the next: the format is set once, the line-up every
          * time somebody cannot make it. */
@@ -839,11 +885,11 @@
           el('div', { class: 'rsc', text: scoreText }), right
         ])
       ]),
-      count > 1 ? el('button', {
+      count > 1 ? U.adminOnly(el('button', {
         class: 'btn btn-ghost', style: 'padding:0 10px',
         'aria-label': 'Match options', text: '⋮',
         onclick: function () { TS.matches.matchOptions(S, api, f, r); }
-      }) : null
+      })) : null
     ]);
   }
 
