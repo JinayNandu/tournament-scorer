@@ -470,12 +470,22 @@
       if (!uid) throw new Error('no uid');
       me.uid = uid;
       step('Anonymous sign-in', 'This phone is ' + uid.slice(0, 10) + '…', true);
-    }, function () {
+    }, function (e) {
+      /* `admin-restricted-operation` is the exact answer Firebase gives
+       * when the Anonymous provider is switched off, and it is worth
+       * saying out loud: the other auth failures look identical from the
+       * app's side but want completely different fixes. A WRONG API KEY
+       * says api-key-not-valid, which is how a mistyped config gets told
+       * apart from a console switch nobody flicked. */
+      var c = (e && e.code) || '';
       step('Anonymous sign-in',
-           'Refused. Turn it on at Build › Authentication › Get started ' +
-           '› Anonymous › Enable. Without it the rules cannot tell one ' +
-           'phone from another and nobody can score.', false);
-      throw new Error('stop');
+        (c.indexOf('admin-restricted') !== -1 || c.indexOf('operation-not-allowed') !== -1)
+          ? 'Not switched on (' + c + '). Authentication › Sign-in method ' +
+            '› Anonymous › Enable › Save.'
+          : 'Refused: ' + (c || 'no code given') + '.', false);
+      /* NOT a reason to stop. Reading is open to everybody signed in or
+       * not, so the next two steps still answer, and knowing the rules
+       * are live is worth having while this one is being fixed. */
     }).then(function () {
       var fs = window.firebase.firestore();
       try { fs.settings({ ignoreUndefinedProperties: true }); } catch (e) {}
@@ -490,16 +500,24 @@
                'rules have not been published or this is the wrong project.', false);
         });
     }).then(function () {
-      /* NOTHING in the rules matches this path, so a database actually
-       * running them must refuse it. A write that SUCCEEDS here means the
-       * rules were never published and the whole database is open to
-       * anybody holding the link - which is invisible until it is abused. */
-      return withTimeout(store.doc('__check__/probe').set({ at: Date.now() }),
-        WRITE_MS, 'probe').then(function () {
+      /* `access/config` is `allow read: if false` for EVERYBODY, so a
+       * database running these rules must refuse to read it. A read that
+       * SUCCEEDS means they were never published and the whole thing is
+       * open to anyone with the link - which is invisible until somebody
+       * abuses it.
+       *
+       * This used to be a write to `__check__/probe`, which could never
+       * have worked: Firestore RESERVES every id matching __.*__ and the
+       * client rejected it as invalid-argument before it reached the
+       * rules at all, so the check reported "could not tell" for ever. A
+       * read probe is better anyway - it writes nothing, so there is no
+       * stray document to tidy up afterwards, and it answers whether or
+       * not anybody is signed in. */
+      return withTimeout(store.doc(CONFIG_PATH).get(), READ_MS, 'rules')
+        .then(function () {
           step('The rules', 'NOT published. This database is wide open: ' +
-               'anyone with the link can change anything. Paste ' +
+               'anyone with the link can change anything in it. Paste ' +
                'tools/firestore.rules into Firestore › Rules and Publish.', false);
-          return store.doc('__check__/probe')['delete']().then(null, function () {});
         }, function (e) {
           var c = normError(e).code;
           step('The rules', c === 'permission_denied'
@@ -508,12 +526,22 @@
             c === 'permission_denied');
         });
     }).then(function () {
-      return exists(store, CONFIG_PATH);
-    }).then(function (yes) {
-      step('The organiser key', yes
-        ? 'Set, so nobody else can claim it.'
+      /* Whether a key has been set cannot be read directly - that is the
+       * point of it - so it is inferred from whether anybody holds one.
+       * `organisers` is readable by an organiser and by its own owner, so
+       * a refusal here means somebody else got there first, which is
+       * itself the answer. */
+      if (!me.uid) return null;
+      return withTimeout(store.collection('organisers').limit(1).get(), READ_MS, 'organisers')
+        .then(function (snap) { return snap && snap.size > 0; },
+              function () { return true; });
+    }).then(function (held) {
+      step('The organiser key', held === null
+        ? 'Cannot tell until this phone can sign in.'
+        : held ? 'Set. Somebody holds it.'
         : 'Not set yet. Open "Who can score" › "I am the organiser" and ' +
-          'set one BEFORE the link goes anywhere.', yes);
+          'set one BEFORE the link goes anywhere.',
+        held === true);
       return me.uid ? exists(store, organiserPath(me.uid)) : false;
     }).then(function (yes) {
       me.organiser = yes;

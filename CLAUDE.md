@@ -801,12 +801,31 @@ the step that is wrong. Five of those six fail silently, and the sign-in
 one fails by making every scorer look like a viewer, which is
 indistinguishable from the app working as designed.
 
-**The rules check is a write that MUST be refused.** Nothing in
-`firestore.rules` matches `__check__/probe`, so a database actually
-running them rejects it; a write that SUCCEEDS there means the rules were
-never published and the whole database is open to anyone with the link -
-which is otherwise invisible until somebody abuses it. The probe deletes
-itself in that case. Do not add a rule matching that path.
+**The rules check is a READ that must be refused.** `access/config` is
+`allow read: if false` for everybody, organisers included, so a database
+running these rules refuses it; a read that SUCCEEDS means they were
+never published and the whole thing is open to anyone with the link,
+which is otherwise invisible until somebody abuses it.
+
+It was a WRITE to `__check__/probe` first, and that could never have
+worked: **Firestore reserves every id matching `__.*__`**, so the client
+rejected it as `invalid_argument` before it reached the rules, and the
+check said "could not tell" for ever. Nothing but a real project would
+have shown that - the pure tests pass either way and there is nothing to
+see in the source. A read probe is better regardless: it writes nothing,
+so there is no stray document to tidy up, and it answers whether or not
+anybody is signed in.
+
+**A failed sign-in does not stop the check.** Reading is open to
+everybody, so the read and the rules steps still answer, and knowing the
+rules are live is worth having while the sign-in is being fixed. Each
+step says what it found and the sequence carries on.
+
+**`auth/admin-restricted-operation` means the Anonymous provider is
+off.** It is worth naming, because every auth failure looks identical
+from inside the app and they want completely different fixes - a mistyped
+config says `auth/api-key-not-valid` instead, which is how a bad paste
+gets told apart from a switch nobody flicked.
 
 **The membership write comes BEFORE the organiser key.** The other way
 round, a failure between the two leaves a database with a key nobody

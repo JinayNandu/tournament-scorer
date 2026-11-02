@@ -31,10 +31,11 @@
  * file, and it is worth reading on its own account.
  */
 window.TS_FIREBASE = {
-  apiKey: '',
-  authDomain: '',
-  projectId: '',
-  storageBucket: '',
-  messagingSenderId: '',
-  appId: ''
+  apiKey: 'AIzaSyAoyf52zVVZKTXcCBLwHVKvdibDPzjSO7g',
+  authDomain: 'tournament-scorebook.firebaseapp.com',
+  projectId: 'tournament-scorebook',
+  storageBucket: 'tournament-scorebook.firebasestorage.app',
+  messagingSenderId: '493854897900',
+  appId: '1:493854897900:web:fbb7c7edd4bd9f0e0397c9',
+  measurementId: 'G-YF9EBFFB7K'
 };
