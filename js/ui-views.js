@@ -18,13 +18,18 @@
    * with a note underneath, which answers a question nobody asked and
    * leaves all three of them guessing. So it asks instead.
    *
-   * It is NOT a gate, and that distinction is the whole design. It shows
-   * only where the app genuinely does not know yet - the tournament is
-   * shared, this phone cannot edit, and nobody has answered before - and
-   * answering it once is the end of it for good. A scorer or an organiser
-   * never sees it at all, because the role they already hold IS the
-   * answer. Every button leads somewhere real, so there is nothing to
-   * dismiss and no way to get stuck behind it. */
+   * It is NOT a gate, and that distinction is the whole design. It opens
+   * BY ITSELF only where the app genuinely does not know yet - the
+   * tournament is shared, this phone cannot edit, and nobody has
+   * answered before. A scorer or an organiser is never stopped by it,
+   * because the role they already hold IS the answer.
+   *
+   * But it is a SCREEN, not a one-off. Somebody who came to watch and is
+   * then handed a court has to be able to say so, and a question you can
+   * only answer once is a trap however politely it is worded. So
+   * `welcome` is a route like any other: the list carries a back button
+   * to it and it carries one back to the list. Every button on it leads
+   * somewhere real, so there is nothing to dismiss either. */
   var WELCOME_KEY = 'ts1:welcomed';
 
   function welcomed() {
@@ -93,12 +98,17 @@
     }
 
     return el('div', {}, [
-      api.topbar('Tournament Scorebook', null, null),
+      /* Only once somebody has been past it: a way back on the very
+       * first screen points at nothing they have seen. */
+      api.topbar('Tournament Scorebook', null, null,
+        welcomed() ? { label: 'Tournaments',
+                       onclick: function () { api.go('home'); } } : null),
       el('div', { class: 'wrap stack' }, [
         el('div', { class: 'card stack-s', style: 'text-align:center' }, [
           courtMark(),
           el('h2', { text: 'What are you here for?' }),
-          el('p', { class: 'muted', text: 'Tap one. You only get asked once.' })
+          el('p', { class: 'muted', text:
+            'Tap one. You can change it whenever you like.' })
         ]),
 
         choice('watch', 'Watch the scores',
@@ -106,7 +116,7 @@
                : 'Nothing has started yet, but this is where it will appear.',
           function () {
             setWelcomed();
-            if (only) openOnly(); else api.render();
+            if (only) openOnly(); else api.go('home');
           }),
 
         choice('score', 'I am scoring a match',
@@ -114,7 +124,7 @@
           function () {
             setWelcomed();
             if (only) { openOnly(); TS.extras.accessSheet(S, api); return; }
-            api.render();
+            api.go('home');
             U.toast(many ? 'Open the tournament you are scoring, then tap "I am scoring".'
                          : 'Nothing has been set up yet. Ask the organiser.');
           }),
@@ -123,7 +133,7 @@
           'Create one, or take charge of one that is already here.',
           function () {
             setWelcomed();
-            api.render();
+            api.go('home');
             TS.extras.accessSheet(S, api, 'organiser');
           })
       ])
@@ -158,11 +168,22 @@
         ]);
 
     return el('div', {}, [
-      api.topbar('Tournament Scorebook', modeLine(S), [
+      /* "Tournaments" rather than the app's name, because that is what
+       * every other screen has always called this one - the hub's way
+       * out says "< Tournaments" - and the app's name now belongs to the
+       * screen in front of it.
+       *
+       * "Menu" is a generic word and this app usually refuses them, the
+       * way it refused "Back". It is here because the destination
+       * genuinely is three choices on a screen, and no concrete name for
+       * that beat being understood instantly. "Start" was the other
+       * candidate and it collides with the Start a tournament button
+       * sitting on the very screen it points at. */
+      api.topbar('Tournaments', modeLine(S), [
         S.tournaments.length ? U.adminOnly(el('button', {
           class: 'btn btn-primary btn-sm', text: 'New',
           onclick: function () { S.wizard = null; api.go('wizard'); } })) : null
-      ]),
+      ], { label: 'Menu', onclick: function () { api.go('welcome'); } }),
       el('div', { class: 'wrap stack' }, [
         S.info.sharedFailed ? U.banner(
           'The shared backend is set up but did not answer, so scores are ' +
@@ -1021,6 +1042,7 @@
     return e ? (e.shortName || e.name) : (side === 'home' ? 'Home' : 'Away');
   }
 
-  TS.views = { home: home, hub: hub, fixture: fixture, liveTally: liveTally };
+  TS.views = { home: home, welcome: welcomeScreen, hub: hub, fixture: fixture,
+               liveTally: liveTally };
 
 })(window.TS = window.TS || {});

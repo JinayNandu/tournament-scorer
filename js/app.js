@@ -154,7 +154,9 @@
 
   function go(screen, params) {
     params = params || {};
-    if (screen === 'home') {
+    /* The chooser is a sibling of the list, not a step in front of it,
+     * so arriving at either one lets go of whatever was open. */
+    if (screen === 'home' || screen === 'welcome') {
       drop('tour'); drop('fix'); drop('rub');
       S.tid = null; S.tournament = null; S.fid = null; S.rid = null;
       S.entrants = []; S.players = []; S.fixtures = []; S.rubbers = [];
@@ -307,6 +309,7 @@
       case 'wizard':   body = TS.setup.render(S, api); break;
       case 'fixture':  body = TS.views.fixture(S, api); break;
       case 'hub':      body = TS.views.hub(S, api); break;
+      case 'welcome':  body = TS.views.welcome(S, api); break;
       default:         body = TS.views.home(S, api); break;
     }
     U.mount(root, body);
@@ -325,6 +328,7 @@
       case 'wizard':   body = TS.setup.render(S, api); break;
       case 'fixture':  body = TS.views.fixture(S, api); break;
       case 'hub':      body = TS.views.hub(S, api); break;
+      case 'welcome':  body = TS.views.welcome(S, api); break;
       default:         body = TS.views.home(S, api); break;
     }
     U.mount(root, body);

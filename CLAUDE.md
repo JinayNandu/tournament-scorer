@@ -585,14 +585,31 @@ which answers a question nobody asked and leaves all three guessing - so
 it asks instead: Watch the scores / I am scoring a match / I am running
 the tournament, one line of explanation each.
 
-**It is not a gate, and that distinction is the whole design.** It shows
-only where the app genuinely does not know - the tournament is shared,
-this phone cannot edit, and nobody has answered before (`ts1:welcomed`).
-A scorer or an organiser never sees it, because the role they already
-hold IS the answer, and on a lone device there is no role to pick. Every
-button goes somewhere real, so there is nothing to dismiss and no way to
-be stuck behind it. If storage throws, `welcomed()` returns TRUE - a
-screen that cannot remember the answer must not keep asking.
+**It is not a gate, and that distinction is the whole design.** It opens
+BY ITSELF only where the app genuinely does not know - the tournament is
+shared, this phone cannot edit, and nobody has answered before
+(`ts1:welcomed`). A scorer or an organiser is never stopped by it,
+because the role they already hold IS the answer, and on a lone device
+there is no role to pick. If storage throws, `welcomed()` returns TRUE -
+a screen that cannot remember the answer must not keep asking.
+
+**But it is a SCREEN, not a one-off, and that was got wrong first time.**
+Somebody who came to watch and is then handed a court has to be able to
+say so, and a question you can only answer once is a trap however
+politely it is worded. `welcome` is a route like any other: the list
+carries "< Menu" to it, it carries "< Tournaments" back, and from a
+match the same button in the same corner reaches it in two taps. The way
+back only appears once somebody HAS been past it, because a back button
+on the very first screen points at nothing they have seen.
+
+**The list is called "Tournaments" now**, which is what every other
+screen had always called it - the hub's way out has said "< Tournaments"
+since it was built - and the app's name moved to the screen in front of
+it. "Menu" is a generic word and this app refuses them as a rule, the
+way it refused "Back"; it is here because the destination genuinely is
+three choices on a screen and no concrete name beat being understood
+instantly. "Start" was the other candidate and it collides with the
+Start a tournament button sitting on the screen it points at.
 
 **Each answer lands on the thing it names, not on a menu.** With one
 tournament - which is the normal case for an event - Watch opens it
