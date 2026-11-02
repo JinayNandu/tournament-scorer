@@ -706,6 +706,28 @@
     return node;
   }
 
+  /* The narrower gate: this changes the TOURNAMENT, not a score. Teams,
+   * format, groups, settings, the codes themselves. Somebody holding
+   * only the scoring code is shown none of it, because being refused is
+   * a worse way to learn where the line is than never seeing the button.
+   *
+   * It defaults OPEN when the store cannot answer, the same as the other
+   * two: this is a hint to the screen, and tools/firestore.rules is the
+   * enforcement. A gate that failed closed would hide an organiser's own
+   * buttons from them whenever the answer was late. */
+  function managerOnly(node) {
+    if (TS.store && TS.store.canManage && !TS.store.canManage()) return null;
+    return node;
+  }
+
+  /* Narrower still: CREATING a tournament. Running one does not come
+   * with the right to start another, which is the whole reason the
+   * organiser key is app-wide and the admin code is not. */
+  function organiserOnly(node) {
+    if (!TS.store || !TS.store.access) return node;
+    return TS.store.access().organiser ? node : null;
+  }
+
   applyTheme();
 
   TS.ui = {
@@ -721,6 +743,7 @@
     gameScoring: gameScoring, scoringOverrideFor: scoringOverrideFor,
     gameScoringOf: gameScoringOf,
     colorFor: colorFor, PALETTE: PALETTE, adminOnly: adminOnly,
+    managerOnly: managerOnly, organiserOnly: organiserOnly,
     theme: theme, setTheme: setTheme, applyTheme: applyTheme,
     themePicker: themePicker, themeToggle: themeToggle,
     resolvedTheme: resolvedTheme, onTheme: onTheme,

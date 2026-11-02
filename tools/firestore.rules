@@ -11,12 +11,30 @@ rules_version = '2';
 // nothing. That is the whole point: a spectator should get the scores
 // with no account, no password and nothing to install.
 //
-// Writing takes membership, and there are two kinds:
+// Writing takes membership, and there are three kinds:
 //
 //   organisers/{uid}                 may create tournaments and run every
 //                                    one of them.
-//   tournaments/{tid}/scorers/{uid}  may score THAT tournament and no
-//                                    other.
+//   tournaments/{tid}/admins/{uid}   may run THAT tournament - its teams,
+//                                    its format, its settings, its codes -
+//                                    but may not create another.
+//   tournaments/{tid}/scorers/{uid}  may score THAT tournament. Nothing
+//                                    else: not its teams, not its format,
+//                                    not its codes.
+//
+// THE CUT BETWEEN THE LAST TWO IS THE SHAPE OF THE PATH, and that is not
+// an accident of the layout. A tournament's teams, players, groups, games
+// and settings all live in the tournament DOCUMENT; its scores live in
+// the fixtures and rubbers BENEATH it. So "may change this tournament" is
+// write access to one document and "may score it" is write access to the
+// collections under it, and there is nothing to enumerate or keep in
+// step. Add a field to a tournament and it is covered already.
+//
+// Why bother, when the file goes on to admit that a scorer with a code
+// can do real damage anyway? Because the damage differs in kind. A scorer
+// entering a wrong score is Tuesday; a scorer who regenerates the draw at
+// half past four has ended the tournament. Twelve people get the scoring
+// code and two get the admin one.
 //
 // A uid comes from Firebase Anonymous sign-in, which the app does for
 // everybody on load, invisibly. It is not an identity - it is a handle on
@@ -54,11 +72,15 @@ rules_version = '2';
 //
 // WHAT IS STILL NOT PROTECTED
 //
-// Anyone with a tournament's scoring code can score it, rename a team or
+// Anyone with a tournament's scoring code can enter a wrong score or
 // delete a match, and the rules cannot tell a scorer from someone they
 // read the code out to. That is the same trust as handing over a paper
 // scoresheet. The scoring lease in store.js is cooperative for the same
 // reason: the real problem is two well-meaning scorers, not an attacker.
+//
+// And every tournament is still world-readable. Scores on a wall are the
+// point; if that ever stops being true, it is this file that has to say
+// so, and nothing in the app relies on the secrecy of anything it shows.
 //
 // Anything not matched below is denied. That is Firestore's default and
 // it is left to stand, which means a collection added to the app later
@@ -84,9 +106,18 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/tournaments/$(tid)/access/code).data.scorerCode;
     }
 
+    function adminCode(tid) {
+      return get(/databases/$(database)/documents/tournaments/$(tid)/access/admin).data.adminCode;
+    }
+
     function isOrganiser() {
       return signedIn() &&
         exists(/databases/$(database)/documents/organisers/$(request.auth.uid));
+    }
+
+    function isAdmin(tid) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/tournaments/$(tid)/admins/$(request.auth.uid));
     }
 
     function isScorer(tid) {
@@ -94,8 +125,15 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/tournaments/$(tid)/scorers/$(request.auth.uid));
     }
 
+    // Everything about one tournament except bringing it into existence.
+    function mayManage(tid) {
+      return isOrganiser() || isAdmin(tid);
+    }
+
+    // Managing is a superset of scoring, always. Nobody is put in charge
+    // of a tournament they are then refused permission to score.
     function mayScore(tid) {
-      return isOrganiser() || isScorer(tid);
+      return mayManage(tid) || isScorer(tid);
     }
 
     // ---- the organiser key ------------------------------------------
@@ -119,9 +157,35 @@ service cloud.firestore {
     }
 
     // ---- one tournament's scoring code -------------------------------
+    // Everybody who may score may read it, which includes the scorers
+    // themselves: it is the code they already typed.
     match /tournaments/{tid}/access/code {
       allow read: if mayScore(tid);
-      allow write: if isOrganiser();
+      allow write: if mayManage(tid);
+    }
+
+    // ---- one tournament's admin code ---------------------------------
+    // A SEPARATE DOCUMENT, and that is the whole reason it works. Put
+    // both codes in one document and anyone who may read the scoring code
+    // reads the admin code beside it, which hands every scorer the keys
+    // and makes two codes worse than one. Whoever already runs this
+    // tournament may read it, because they have to say it out loud to the
+    // person they are handing it to.
+    match /tournaments/{tid}/access/admin {
+      allow read: if mayManage(tid);
+      allow write: if mayManage(tid);
+    }
+
+    // ---- who runs one tournament -------------------------------------
+    // Same shape as scorers below, against the other code. An admin can
+    // hand their own access back; taking somebody else's needs the
+    // organiser, so that two admins cannot lock each other out.
+    match /tournaments/{tid}/admins/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || mayManage(tid));
+      allow create: if signedIn() && request.auth.uid == uid &&
+                       request.resource.data.code == adminCode(tid);
+      allow update: if false;
+      allow delete: if isOrganiser() || (signedIn() && request.auth.uid == uid);
     }
 
     // ---- who may score one tournament --------------------------------
@@ -130,16 +194,22 @@ service cloud.firestore {
       allow create: if signedIn() && request.auth.uid == uid &&
                        request.resource.data.code == scorerCode(tid);
       allow update: if false;
-      // An organiser takes access away; a scorer can hand it back.
-      allow delete: if isOrganiser() || (signedIn() && request.auth.uid == uid);
+      // Whoever runs the tournament takes access away; a scorer can
+      // hand it back.
+      allow delete: if mayManage(tid) || (signedIn() && request.auth.uid == uid);
     }
 
     // ---- the tournaments themselves ----------------------------------
+    // The document itself is the tournament's SHAPE - name, teams,
+    // players, groups, stages, the games a match is made of, the scoring
+    // settings. A scoring code does not reach it. See the note at the top
+    // of this file: this one line is the whole difference between the two
+    // codes, and the scores are safe underneath it either way.
     match /tournaments/{tid} {
       allow read: if true;
       allow create: if isOrganiser();
-      allow update: if mayScore(tid);
-      allow delete: if isOrganiser();
+      allow update: if mayManage(tid);
+      allow delete: if mayManage(tid);
     }
 
     // ---- what a tournament is made of --------------------------------

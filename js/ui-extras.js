@@ -407,21 +407,26 @@
    * sheet's to guess, so it asks TS.store.access() and does as it is
    * told. The sheet repaints itself rather than calling render(), the
    * same as every other sheet in the app. */
-  function accessSheet(S, api, pane) {
-    U.sheet('Who can score', function (close) {
+  /* `done` is what happens AFTER something actually worked, and it is
+   * separate from closing on purpose: a sheet that was opened and shut
+   * again has not changed anything, so it must not move anybody. The
+   * caller that opened this from the chooser passes "now go to the
+   * list"; dismissing it leaves them exactly where they were. */
+  function accessSheet(S, api, pane, done) {
+    U.sheet('Codes and access', function (close) {
       var host = el('div', { class: 'stack' });
-      if (pane === 'organiser') organiserPane(S, api, host, close);
-      else paintAccess(S, api, host, close);
+      if (pane === 'organiser') organiserPane(S, api, host, close, done);
+      else paintAccess(S, api, host, close, done);
       return [host];
     });
   }
 
-  function paintAccess(S, api, host, close) {
+  function paintAccess(S, api, host, close, done) {
     var a = TS.store.access();
     if (!a.shared) return U.mount(host, deviceOnly());
     if (!a.codes) return U.mount(host, claudeShare(a));
-    if (a.canEdit) return U.mount(host, scoringCode(S, api, host, close, a));
-    return U.mount(host, joinPane(S, api, host, close));
+    if (a.canEdit) return U.mount(host, codesPane(S.tid, a));
+    return U.mount(host, joinPane(S, api, host, close, done));
   }
 
   function deviceOnly() {
@@ -453,57 +458,107 @@
     ];
   }
 
-  function scoringCode(S, api, host, close, a) {
-    var box = el('div', { class: 'codebox', text: '…' });
+  /* TWO CODES, because a tournament has two jobs to hand out and they go
+   * to different numbers of people. Eleven courts means eleven scorers,
+   * and eleven people who can rename a team is not a team of eleven
+   * scorers, it is a tournament waiting to be rearranged by accident.
+   *
+   * Which cards you see is which codes you are allowed to KNOW, and that
+   * is decided by the rules on the server, not here: a scorer asking for
+   * the admin code is answered null, so the screen does not have to be
+   * trusted to hide it. See tools/firestore.rules. */
+  function codesPane(tid, a) {
     var rows = [
-      el('div', { class: 'card stack-s' }, [
-        el('div', { class: 'eyebrow', text: 'The code for this tournament' }),
-        box,
-        el('p', { class: 'tiny muted', text:
-          'Read it out to whoever is scoring. They open this same link, ' +
-          'tap "I am scoring" and type it in. Everybody else watches ' +
-          'live with nothing to type at all.' })
-      ])
+      codeCard(tid, 'The scoring code', 'scorer', a.canManage,
+        'Read it out to whoever is scoring a court. They open this same ' +
+        'link, tap "I am scoring a match" and type it in. It lets them ' +
+        'enter and correct scores, and nothing else. Everybody else ' +
+        'watches live with nothing to type at all.')
     ];
 
-    if (a.organiser) {
-      rows.push(el('div', { class: 'row', style: 'gap:8px' }, [
+    if (a.canManage) {
+      rows.push(codeCard(tid, 'The admin code', 'admin', true,
+        'For whoever is running the tournament with you. Everything the ' +
+        'scoring code does, and the teams, the format, the settings and ' +
+        'these two codes as well. One or two people, not twelve.'));
+      rows.push(el('p', { class: 'tiny muted', text:
+        'A new code does not stop anybody already using the old one — it ' +
+        'only changes what the next person has to type. Take access away ' +
+        'in the Firebase console, under tournaments › scorers or ' +
+        'tournaments › admins.' }));
+    } else {
+      rows.push(el('p', { class: 'tiny muted', text:
+        'Your code scores this tournament. Changing the teams, the format ' +
+        'or the settings takes the admin code, which is a different one — ' +
+        'ask whoever set the tournament up.' }));
+    }
+    return rows;
+  }
+
+  function codeCard(tid, title, kind, mine, blurb) {
+    var box = el('div', { class: 'codebox', text: '…' });
+    function read() {
+      return kind === 'admin' ? TS.store.adminCode(tid) : TS.store.scorerCode(tid);
+    }
+    function write(c) {
+      return kind === 'admin' ? TS.store.setAdminCode(tid, c)
+                              : TS.store.setScorerCode(tid, c);
+    }
+
+    var kids = [el('div', { class: 'eyebrow', text: title }), box];
+    if (mine) {
+      kids.push(el('div', { class: 'row', style: 'gap:8px' }, [
         el('button', { class: 'btn btn-sm', text: 'Copy',
           onclick: function () {
             U.copyText(box.textContent); U.toast('Copied.');
           } }),
         el('button', { class: 'btn btn-sm', text: 'New code',
           onclick: function () {
-            TS.store.setScorerCode(S.tid, TS.store.newCode()).then(function (made) {
+            write(TS.store.newCode()).then(function (made) {
               box.textContent = made;
               U.toast('New code. The old one stops working.');
             }, function (e) { U.toast(e.message || 'Could not change it.', 'bad'); });
           } })
       ]));
-      rows.push(el('p', { class: 'tiny muted', text:
-        'A new code does not stop anybody already scoring — it only ' +
-        'changes what the next person has to type. Remove somebody from ' +
-        'the Firebase console, under tournaments › scorers.' }));
-    } else {
-      rows.push(el('p', { class: 'tiny muted', text:
-        'You can score this tournament. Only the organiser can change ' +
-        'the code or hand out access to the others.' }));
     }
+    kids.push(el('p', { class: 'tiny muted', text: blurb }));
 
-    TS.store.scorerCode(S.tid).then(function (c) {
+    read().then(function (c) {
       if (c) { box.textContent = c; return; }
-      if (!a.organiser) { box.textContent = '—'; return; }
-      /* A tournament that has never been shared has no code yet. Minting
-       * one on sight beats a button that says "make a code": there is no
-       * such thing as wanting a shared tournament without one. */
-      TS.store.setScorerCode(S.tid, TS.store.newCode()).then(function (made) {
+      if (!mine) { box.textContent = '—'; return; }
+      /* No code yet means a tournament that has never been shared, or
+       * one made before there were two of them. Minting on sight beats a
+       * button that says "make a code": there is no such thing as
+       * wanting a shared tournament without one. */
+      write(TS.store.newCode()).then(function (made) {
         box.textContent = made;
       }, function () { box.textContent = '—'; });
     });
-    return rows;
+    return el('div', { class: 'card stack-s' }, kids);
   }
 
-  function joinPane(S, api, host, close) {
+  /* Shown once, the moment a tournament is created, because that is the
+   * one moment somebody is certainly looking and the codes are the next
+   * thing they have to do something about - nobody else can help until
+   * they have been read out. Both are minted by the cards themselves on
+   * finding none, so this opens them and nothing more.
+   *
+   * A sheet rather than a step in the wizard: nothing is lost by
+   * dismissing it, because the same two codes sit behind "Codes and
+   * access" on the tournament for as long as it exists. */
+  function newCodes(api, tid) {
+    var a = TS.store.access();
+    if (!a.codes || !a.canManage) return;
+    U.sheet('Two codes to hand out', function () {
+      return [el('div', { class: 'stack' },
+        [el('p', { class: 'small muted', text:
+          'Anybody with the link can watch this live without typing ' +
+          'anything. These are only for the people helping you run it.' })]
+        .concat(codesPane(tid, a)))];
+    });
+  }
+
+  function joinPane(S, api, host, close, done) {
     var rows = [];
 
     if (S.tid) {
@@ -518,7 +573,7 @@
         TS.store.joinTournament(S.tid, code.value, who.value).then(function () {
           close();
           U.toast('You can score this tournament now.');
-          api.render();
+          if (done) done(); else api.render();
         }, function (e) {
           go.disabled = false;
           U.toast((e && e.message) || 'That did not work.', 'bad');
@@ -526,18 +581,22 @@
       };
       rows.push(el('div', { class: 'card stack' }, [
         el('div', { class: 'eyebrow', text: 'Scoring this tournament' }),
-        U.field('The code the organiser gave you', code),
+        U.field('The code you were given', code),
         U.field('Your name', who),
         go
       ]));
+      /* One field for both codes. Which one somebody holds is not
+       * theirs to know, let alone to declare before they are allowed to
+       * type it - the server can tell, so the server is asked. */
       rows.push(el('p', { class: 'small muted', text:
-        'Without a code you can still watch all of it, live. The code is ' +
-        'only needed to change something.' }));
+        'Either code works here: the scoring code lets you score, the ' +
+        'admin code lets you run the tournament as well. Without one you ' +
+        'can still watch all of it, live.' }));
     }
 
     rows.push(el('div', { class: 'row', style: 'margin-top:4px' }, [
       el('button', { class: 'btn btn-ghost btn-sm', text: 'I am the organiser',
-        onclick: function () { organiserPane(S, api, host, close); } })
+        onclick: function () { organiserPane(S, api, host, close, done); } })
     ]));
     return rows;
   }
@@ -552,7 +611,7 @@
    * answer it properly: they take the first key typed into a database
    * that has none, take a matching one after that, and refuse anything
    * else. So the screen says both things and the server decides. */
-  function organiserPane(S, api, host, close) {
+  function organiserPane(S, api, host, close, done) {
     var key = U.input({ placeholder: 'Organiser key',
       autocomplete: 'off', spellcheck: 'false',
       style: 'text-transform:uppercase;letter-spacing:.14em;font-weight:700' });
@@ -564,7 +623,7 @@
       TS.store.becomeOrganiser(key.value, who.value).then(function () {
         close();
         U.toast('You are set up as an organiser.');
-        api.render();
+        if (done) done(); else api.render();
       }, function (e) {
         go.disabled = false;
         U.toast((e && e.message) || 'That did not work.', 'bad');
@@ -587,7 +646,7 @@
         'it — if somebody gave you one of those, go back and use it there.' }),
       el('div', { class: 'row' }, [
         el('button', { class: 'btn btn-ghost btn-sm', text: 'Back',
-          onclick: function () { paintAccess(S, api, host, close); } })
+          onclick: function () { paintAccess(S, api, host, close, done); } })
       ])
     ]);
   }
@@ -628,6 +687,7 @@
   }
 
   TS.extras = {
+    newCodes: newCodes,
     setupSheet: setupSheet,
     leaderboard: leaderboard, timeline: timeline, bigScreen: bigScreen,
     dataSheet: dataSheet, playerRows: playerRows, feedItems: feedItems,

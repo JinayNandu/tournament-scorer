@@ -381,14 +381,14 @@
         return [el('div', { class: 'stack-s' }, [
           el('button', { class: 'btn btn-block', text: 'Score it',
             onclick: function () { close(); api.go('fixture', { fid: f.id }); } }),
-          el('button', { class: 'btn btn-block', text: 'Set up the games',
-            onclick: function () { close(); setupMeeting(S, api, f); } }),
+          U.managerOnly(el('button', { class: 'btn btn-block', text: 'Set up the games',
+            onclick: function () { close(); setupMeeting(S, api, f); } })),
           count > 1 ? el('button', { class: 'btn btn-block', text: 'Open the match',
             onclick: function () {
               close(); api.go('fixture', { fid: f.id, meeting: true });
             } }) : null,
-          el('button', { class: 'btn btn-block btn-danger', text: 'Remove this match',
-            onclick: function () { close(); removeFixture(S, api, f); } }),
+          U.managerOnly(el('button', { class: 'btn btn-block btn-danger', text: 'Remove this match',
+            onclick: function () { close(); removeFixture(S, api, f); } })),
           count === 1 ? el('p', { class: 'tiny muted', style: 'margin-top:6px', text:
             'Two teams can play several games — name them once and it ' +
             'applies to every match in the tournament.' }) : null
@@ -1070,8 +1070,8 @@
             } })
         ]),
         el('div', { class: 'row', style: 'margin-top:20px' }, [
-          el('button', { class: 'btn btn-sm btn-danger', text: 'Remove this game',
-            onclick: function () { close(); removeMatch(S, api, f, r); } })
+          U.managerOnly(el('button', { class: 'btn btn-sm btn-danger', text: 'Remove this game',
+            onclick: function () { close(); removeMatch(S, api, f, r); } }))
         ])
       ];
     });

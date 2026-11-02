@@ -971,6 +971,11 @@
       TS.app.state.wizard = null;
       api.go('hub', { tid: t.id, tab: 'matches' });
       U.toast(t.entrants.length + ' teams, ' + fixtures.length + ' matches.');
+      /* The tournament exists; now it needs staffing. Both codes are
+       * minted and shown here rather than left to be discovered, because
+       * the organiser cannot hand out what they have not been told
+       * about, and the next thing they do is walk off and tell people. */
+      TS.extras.newCodes(api, t.id);
     })['catch'](function (e) {
       W.creating = false;
       W.error = (e && e.code === 'invalid_argument')

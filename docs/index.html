@@ -829,13 +829,23 @@ table.t tr.qline td { border-bottom: 2px solid var(--qualify); }
 .tmeta { display: block; margin-top: 5px; font-size: 10.5px; font-weight: 700;
   letter-spacing: .13em; text-transform: uppercase; color: var(--ink-3); }
 
-/* The court on the empty screen. Stroked in currentColor so it follows
-   the theme, and held well back - it is a watermark, not a picture. */
+/* The playing surfaces on the empty screen. Stroked in currentColor so
+   they follow the theme, and held well back - a watermark, not a picture.
+   They are stacked on top of each other and cross-faded, so the box keeps
+   one fixed size and nothing below it ever moves. 132 wide against the
+   220x100 box is 60 tall. */
 .welcome { padding-top: var(--s5); }
-.courtmark { display: block; width: 132px; height: auto; margin: 0 auto var(--s4);
-  color: var(--ink); opacity: .2; }
-.courtmark rect, .courtmark line { fill: none; stroke: currentColor;
+.marks { position: relative; width: 132px; height: 60px;
+  margin: 0 auto var(--s4); }
+.courtmark { display: block; position: absolute; top: 0; left: 0;
+  width: 100%; height: 100%; color: var(--ink);
+  opacity: 0; transition: opacity .9s ease; }
+.courtmark.on { opacity: .2; }
+.courtmark > * { fill: none; stroke: currentColor;
   stroke-width: 3; stroke-linecap: square; }
+@media (prefers-reduced-motion: reduce) {
+  .courtmark { transition: none; }
+}
 
 .preset {
   display: block; width: 100%; text-align: left; cursor: pointer;

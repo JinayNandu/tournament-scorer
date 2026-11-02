@@ -563,6 +563,26 @@ and the live cards carry the same team colours as everything else.
 
 ## The empty screen is the first thing anyone sees
 
+**Five playing surfaces, not one court.** `GROUNDS` in `ui-views.js`
+holds a racket court, a cricket ground, a football pitch, a tennis court
+and a basketball court, all in the same 220x100 box, all stroked in
+currentColor so they follow the theme. `sportMark()` stacks them and
+cross-fades one every 3.4 seconds.
+
+It is five because THIS IS NOT A PICKLEBALL APP. It started as one and a
+single court said so, which is the wrong promise to make to somebody who
+has come to score a cricket match - the engines have covered cricket and
+football since the day they were written. They cross-fade in place rather
+than sliding, so it reads as one mark changing its mind rather than a
+carousel demanding to be watched, and the box is a fixed 132x60 so
+nothing below it ever moves.
+
+Two things it must keep doing: the timer checks `wrap.isConnected` each
+time round and stops when the screen is gone, because nothing unmounts it
+explicitly and otherwise every visit to the chooser leaves another one
+running; and `prefers-reduced-motion: reduce` gets the court and no
+rotation at all.
+
 It was three lines of grey text. `courtMark` draws a court in plan -
 built as SVG rather than fetched, so it weighs nothing, stays sharp at
 any size, recolours with the theme because it is stroked in
@@ -592,6 +612,13 @@ shared, this phone cannot edit, and nobody has answered before
 because the role they already hold IS the answer, and on a lone device
 there is no role to pick. If storage throws, `welcomed()` returns TRUE -
 a screen that cannot remember the answer must not keep asking.
+
+**Dismissing a sheet is not an answer, so it must not move anybody.**
+The chooser's "I am running the tournament" used to go to the list and
+THEN open the organiser sheet, which left anybody who shut the sheet
+again standing somewhere they had not asked to be. `accessSheet` takes a
+`done` callback that fires only on success, separately from `close` -
+and that split is the rule, not the workaround.
 
 **But it is a SCREEN, not a one-off, and that was got wrong first time.**
 Somebody who came to watch and is then handed a court has to be able to
@@ -820,7 +847,7 @@ reading on its own account.
 
 ---
 
-## Who may write: admin and viewer
+## Who may write: admin, scorer and viewer
 
 **Anyone with the link can WATCH. Writing takes membership.** That is the
 whole feature, and the three places it is decided are not the same place:
@@ -831,16 +858,41 @@ whole feature, and the three places it is decided are not the same place:
 | artifact | claude.ai | the page's own Share menu |
 | firestore | `tools/firestore.rules` | a code, typed once per phone |
 
-**Hiding a button is politeness, not access control.** `TS.store.canEdit()`
-is the single answer and `set`, `update`, `del` and `setScorerCode` refuse
-without it - BEFORE the localStorage mirror, which is the part that
-matters. Every write mirrors locally first so a dropped connection is
-survivable; for a viewer that would be exactly wrong, because their own
-phone would accept the change, show it back to them, and they would spend
-the afternoon looking at a tournament nobody else can see. Refusing at the
-store also means a control some screen forgot to hide costs a toast
-instead of a divergence. `U.adminOnly(node)` does the hiding, and it is
-greppable for that reason.
+**THREE ROLES, TWO QUESTIONS.** `admin` runs a tournament, `scorer`
+scores it, `viewer` watches it - and every screen asks one of two things:
+
+| question | answer | hides with |
+|---|---|---|
+| may you change the SCORES? | `TS.store.canEdit()` | `U.adminOnly(node)` |
+| may you change the TOURNAMENT? | `TS.store.canManage()` | `U.managerOnly(node)` |
+| may you CREATE a tournament? | `access().organiser` | `U.organiserOnly(node)` |
+
+Keeping it to those is why adding the scorer tier did not mean revisiting
+every screen: `canEdit()` already said yes to everybody who could write
+anything, and it still does.
+
+**Hiding a button is politeness, not access control.** `set`, `update`
+and `del` refuse without `canEdit()` - BEFORE the localStorage mirror,
+which is the part that matters. Every write mirrors locally first so a
+dropped connection is survivable; for a viewer that would be exactly
+wrong, because their own phone would accept the change, show it back to
+them, and they would spend the afternoon looking at a tournament nobody
+else can see. Refusing at the store also means a control some screen
+forgot to hide costs a toast instead of a divergence. The three helpers
+above are greppable for the same reason.
+
+**The manage cut is the SHAPE OF THE PATH, in both places.** A
+tournament's teams, players, groups, stages, games and settings all live
+in the tournament DOCUMENT; its scores live in the fixtures and rubbers
+BENEATH it. So "may change this tournament" is write access to one
+document and "may score it" is write access to the collections under it:
+`isTournamentDoc(path)` in `store.js` is `/^tournaments\/[^\/]+$/` and
+nothing more, and `tools/firestore.rules` makes exactly the same cut on
+the server. Nothing has to be enumerated or kept in step - add a field to
+a tournament and it is covered already. Get it wrong in either direction
+and it is silent: too tight and scoring stops, too loose and a scorer's
+phone spends the afternoon showing a tournament nobody else can see.
+That is what the `_isTournamentDoc` tests in `selftest.js` are for.
 
 **ASSUME ADMIN UNTIL TOLD OTHERWISE.** The role arrives over a network.
 A board that swallows the first taps of a game is worse than one that
@@ -848,12 +900,44 @@ lets somebody tap and then says the write was refused - the same
 reasoning as the lease, and `app.js` re-renders on `onRole` when the real
 answer lands.
 
-**Two codes, because a tournament has two kinds of staff.** An ORGANISER
-key is app-wide and is what lets somebody create tournaments at all; a
-SCORING code is per tournament. That is why handing one event to somebody
-does not hand over the rest, and why last month's scorers do not still
-have the keys. `access()` reports `organiser` separately from `canEdit`
-for the one screen that needs the difference.
+**THREE CODES, because a tournament has three kinds of staff.**
+
+| code | scope | lets you |
+|---|---|---|
+| organiser key | app-wide, typed once ever | create tournaments, run all of them |
+| admin code | one tournament | run that one: teams, format, settings, both its codes |
+| scoring code | one tournament | enter and correct ITS scores, nothing else |
+
+Per tournament is why handing one event over does not hand over the rest,
+and why last month's scorers do not still have the keys. Running one
+event is deliberately NOT a licence to start another - that is what keeps
+the organiser key app-wide.
+
+**Why two codes per tournament rather than one.** Eleven courts means
+eleven scorers, and eleven people who can rename a team is not a team of
+eleven scorers, it is a tournament waiting to be rearranged by accident.
+A wrong score is Tuesday; a regenerated draw at half past four has ended
+the event. Twelve people get the scoring code and two get the admin one.
+
+**The admin code is a DOCUMENT OF ITS OWN**, `access/admin`, not a second
+field beside the scoring code. Every scorer may read the scoring code -
+it is the one they typed - so a field next to it would be a field they
+can read too, and the admin code would be no code at all.
+
+**One field takes either code.** Which one somebody holds is not theirs
+to know, let alone to declare before they are allowed to type it, so
+`joinTournament` tries it as a scoring code and then as an admin one and
+the SERVER says which it was. Scoring first, because there are far more
+scorers than admins; a wrong code costs two refusals that nobody is
+waiting on.
+
+**Both are minted and shown the moment a tournament is created**
+(`TS.extras.newCodes`), because the organiser cannot hand out what they
+have not been told about, and handing them out is the next thing they do.
+It is a sheet, not a wizard step: nothing is lost by dismissing it, since
+the same two codes sit behind "Codes and access" for as long as the
+tournament exists. Cards mint a missing code on sight, which is also how
+a tournament made before there were two of them acquires the second.
 
 **The code is never checked in the page.** The client cannot read it -
 the rules see to that - so joining is an ordinary write that the server

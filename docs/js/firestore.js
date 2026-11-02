@@ -60,23 +60,36 @@
    * not an identity: it is a handle on this browser. Clearing site data
    * loses it, and that costs a scorer one re-entry of the code.
    *
-   * Two kinds of membership, because a tournament has two kinds of staff:
+   * Three kinds of membership, because a tournament has three kinds of
+   * staff and they are not the same person:
    *
    *   organisers/{uid}                 may create tournaments and run all
    *                                    of them. One key, typed once, ever.
-   *   tournaments/{tid}/scorers/{uid}  may score THAT tournament. A code
-   *                                    per tournament, so handing one
-   *                                    event over does not hand over the
-   *                                    rest, and last month's scorers do
-   *                                    not still have the keys. */
-  var me = { uid: null, organiser: false, scorerOf: {} };
+   *   tournaments/{tid}/admins/{uid}   runs THAT tournament: its teams,
+   *                                    its format, its settings, its
+   *                                    codes. Cannot create another.
+   *   tournaments/{tid}/scorers/{uid}  may score THAT tournament, and
+   *                                    nothing else about it. A code per
+   *                                    tournament, so handing one event
+   *                                    over does not hand over the rest,
+   *                                    and last month's scorers do not
+   *                                    still have the keys.
+   *
+   * The two tournament codes exist because twelve people need one of them
+   * and two people need the other. Giving a courtside scorer the power to
+   * regenerate the draw is not generosity, it is an accident waiting for
+   * a Sunday afternoon. */
+  var me = { uid: null, organiser: false, adminOf: {}, scorerOf: {} };
 
-  /* Pure, so the one line that decides whether somebody may score can be
-   * tested without a network, a project, or a code to type into it. */
+  /* Pure, so the one line that decides what somebody may do can be tested
+   * without a network, a project, or a code to type into it. Order
+   * matters: the widest claim wins, so somebody holding both codes is an
+   * admin rather than mysteriously demoted. */
   function roleOf(state, tid) {
     if (!state || !state.uid) return 'viewer';
     if (state.organiser) return 'admin';
-    if (tid && state.scorerOf && state.scorerOf[tid]) return 'admin';
+    if (tid && state.adminOf && state.adminOf[tid]) return 'admin';
+    if (tid && state.scorerOf && state.scorerOf[tid]) return 'scorer';
     return 'viewer';
   }
 
@@ -104,7 +117,13 @@
 
   function organiserPath(uid) { return 'organisers/' + uid; }
   function scorerPath(tid, uid) { return 'tournaments/' + tid + '/scorers/' + uid; }
+  function adminPath(tid, uid) { return 'tournaments/' + tid + '/admins/' + uid; }
   function codePath(tid) { return 'tournaments/' + tid + '/access/code'; }
+  /* A DOCUMENT OF ITS OWN, not a second field beside the scoring code.
+   * The rules let every scorer read the scoring code - it is the one
+   * they typed - so a field next to it would be a field they can read
+   * too, and the admin code would be no code at all. */
+  function adminCodePath(tid) { return 'tournaments/' + tid + '/access/admin'; }
   var CONFIG_PATH = 'access/config';
 
   /* ------------------------------------------------------ pure helpers -- */
@@ -329,15 +348,20 @@
       .then(function (s) { return !!(s && s.exists); }, function () { return false; });
   }
 
-  /* Asked again whenever a tournament is opened, because being a scorer
-   * is per tournament. Being an organiser is not, so it is only looked up
-   * once, at connect, and after a join. */
+  /* Asked again whenever a tournament is opened, because both tournament
+   * roles are per tournament. Being an organiser is not, so it is looked
+   * up once, at connect, and after a join - and an organiser short-
+   * circuits both reads, since they outrank whatever they would say. */
   function refreshRole(tid) {
     if (!store || !me.uid) return Promise.resolve(roleOf(me, tid));
     if (!tid) return Promise.resolve(roleOf(me, null));
     if (me.organiser) return Promise.resolve('admin');
-    return exists(store, scorerPath(tid, me.uid)).then(function (yes) {
-      me.scorerOf[tid] = yes;
+    return Promise.all([
+      exists(store, adminPath(tid, me.uid)),
+      exists(store, scorerPath(tid, me.uid))
+    ]).then(function (r) {
+      me.adminOf[tid] = r[0];
+      me.scorerOf[tid] = r[1];
       return roleOf(me, tid);
     });
   }
@@ -366,10 +390,26 @@
     });
   }
 
+  /* ONE field on the screen, two codes behind it, and the person typing
+   * is never asked which kind they were given - they would not know, and
+   * being asked to classify your own credential before you may use it is
+   * a quiz, not a login. So it is tried as a scoring code and then as an
+   * admin one, and the SERVER says which it was, the same way it says
+   * whether it was a code at all.
+   *
+   * Scoring first because there are far more scorers than admins, so the
+   * common case costs one write. A wrong code costs two refusals, which
+   * is two refusals nobody is waiting on. */
   function joinTournament(tid, code, name) {
     return claim(scorerPath(tid, me.uid), code, name).then(function () {
       me.scorerOf[tid] = true;
-      return 'admin';
+      return 'scorer';
+    }, function (e) {
+      if (!e || e.code !== 'wrong_code') throw e;
+      return claim(adminPath(tid, me.uid), code, name).then(function () {
+        me.adminOf[tid] = true;
+        return 'admin';
+      });
     });
   }
 
@@ -426,6 +466,23 @@
     var c = normCode(code) || makeCode(6);
     return withTimeout(store.doc(codePath(tid)).set({ scorerCode: c, at: Date.now() }),
       WRITE_MS, codePath(tid)).then(function () { return c; }, failed);
+  }
+
+  /* Only whoever already runs the tournament can read this one back, so
+   * a scorer asking gets null rather than a refusal they could act on. */
+  function adminCode(tid) {
+    if (!store) return Promise.resolve(null);
+    return withTimeout(store.doc(adminCodePath(tid)).get(), READ_MS, adminCodePath(tid))
+      .then(function (s) {
+        return (s && s.exists && s.data() && s.data().adminCode) || null;
+      }, function () { return null; });
+  }
+
+  function setAdminCode(tid, code) {
+    if (!store) return Promise.reject({ code: 'unavailable', message: 'Not connected.' });
+    var c = normCode(code) || makeCode(6);
+    return withTimeout(store.doc(adminCodePath(tid)).set({ adminCode: c, at: Date.now() }),
+      WRITE_MS, adminCodePath(tid)).then(function () { return c; }, failed);
   }
 
   /* ------------------------------------------------------ setup check -- */
@@ -571,6 +628,8 @@
     becomeOrganiser: becomeOrganiser,
     scorerCode: scorerCode,
     setScorerCode: setScorerCode,
+    adminCode: adminCode,
+    setAdminCode: setAdminCode,
     makeCode: makeCode,
     normCode: normCode,
     // exposed for selftest

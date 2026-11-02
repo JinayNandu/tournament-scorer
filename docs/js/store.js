@@ -72,13 +72,21 @@
    * and a scoreboard that swallows the first taps of a game is worse than
    * one that lets a viewer tap and then says the write was refused. Same
    * reasoning as the lease, and for the same reason. */
+  /* THREE ROLES, TWO QUESTIONS. "admin" runs this tournament, "scorer"
+   * scores it, "viewer" watches it - and every screen asks one of two
+   * things about that: may you change the SCORES (canEdit) or may you
+   * change the TOURNAMENT (canManage). Keeping it to two questions is
+   * why adding the scorer tier did not mean revisiting every screen:
+   * canEdit already said yes to everybody who could write anything, and
+   * it still does. */
   var role = 'admin';
   var roleWatchers = [];
 
-  function canEdit() { return role === 'admin'; }
+  function canEdit() { return role === 'admin' || role === 'scorer'; }
+  function canManage() { return role === 'admin'; }
 
   function setRole(next) {
-    if (next !== 'admin' && next !== 'viewer') return role;
+    if (next !== 'admin' && next !== 'scorer' && next !== 'viewer') return role;
     if (next === role) return role;
     role = next;
     roleWatchers.forEach(function (cb) { try { cb(role); } catch (e) { report(e); } });
@@ -99,6 +107,32 @@
       code: 'permission_denied',
       message: 'You are watching this tournament. Ask the organiser for the scoring code if you need to change something.'
     });
+  }
+
+  /* The other refusal: somebody who CAN score, reaching something only
+   * whoever runs the tournament may change. Worth its own sentence,
+   * because "permission denied" to a scorer who has been entering points
+   * all afternoon reads as a bug rather than an answer. */
+  function refuseManage() {
+    return Promise.reject({
+      code: 'permission_denied',
+      message: 'Your code scores this tournament. Changing the teams, the format or the settings needs the admin code.'
+    });
+  }
+
+  /* The tournament DOCUMENT is its shape - name, teams, players, groups,
+   * stages, the games a match is made of, the settings. One more segment
+   * and it is a fixture, a rubber or a lease, which scoring writes all
+   * afternoon. So the test is the shape of the path and nothing else,
+   * exactly as in tools/firestore.rules, and the two cannot drift: add a
+   * field to a tournament and it is covered here already.
+   *
+   * This guard is not the enforcement - the rules are, on a server, and
+   * they would refuse the write anyway. It is here so that a control some
+   * screen forgot to hide costs a toast instead of a local mirror that
+   * disagrees with everybody else's. */
+  function isTournamentDoc(path) {
+    return /^tournaments\/[^\/]+$/.test(String(path || ''));
   }
 
   /* ----------------------------------------------------- local emitter -- */
@@ -295,6 +329,7 @@
     return {
       role: role,
       canEdit: canEdit(),
+      canManage: canManage(),
       backend: backend,
       /* Only the open backend has codes of its own. On the artifact,
        * claude.ai's Share menu already decides and this app must not
@@ -334,11 +369,26 @@
     return TS.firestore.scorerCode(tid);
   }
 
-  /* Minting one is a write, so it is an admin's act like any other. */
+  /* Minting a code is how access is handed out, so it belongs to whoever
+   * runs the tournament. A scorer re-issuing the scoring code would lock
+   * out the other eleven. */
   function setScorerCode(tid, code) {
     if (!canEdit()) return refuse();
+    if (!canManage()) return refuseManage();
     if (backend !== 'firestore') return noCodes();
     return TS.firestore.setScorerCode(tid, code);
+  }
+
+  function adminCode(tid) {
+    if (backend !== 'firestore') return Promise.resolve(null);
+    return TS.firestore.adminCode(tid);
+  }
+
+  function setAdminCode(tid, code) {
+    if (!canEdit()) return refuse();
+    if (!canManage()) return refuseManage();
+    if (backend !== 'firestore') return noCodes();
+    return TS.firestore.setAdminCode(tid, code);
   }
 
   function newCode() {
@@ -436,6 +486,7 @@
 
   function set(path, data) {
     if (!canEdit()) return refuse();
+    if (isTournamentDoc(path) && !canManage()) return refuseManage();
     return queued(path, function () {
       localSet(path, data);                 // always mirror, so a drop is survivable
       if (mode !== 'cloud') { emit(path); return Promise.resolve(); }
@@ -454,6 +505,7 @@
    * document without clobbering each other. */
   function update(path, patch) {
     if (!canEdit()) return refuse();
+    if (isTournamentDoc(path) && !canManage()) return refuseManage();
     return queued(path, function () {
       var cur = localGet(path) || {};
       localSet(path, deepMerge(cur, patch));
@@ -471,6 +523,7 @@
 
   function del(path) {
     if (!canEdit()) return refuse();
+    if (isTournamentDoc(path) && !canManage()) return refuseManage();
     return queued(path, function () {
       localDel(path);
       if (mode !== 'cloud') { emit(path); return Promise.resolve(); }
@@ -643,12 +696,14 @@
     clientId: clientId,
     mode: function () { return mode; },
     backend: function () { return backend; },
-    canEdit: canEdit,
+    canEdit: canEdit, canManage: canManage,
+    _isTournamentDoc: isTournamentDoc,
     role: function () { return role; },
     access: access,
     useTournament: useTournament,
     joinTournament: joinTournament, becomeOrganiser: becomeOrganiser,
     scorerCode: scorerCode, setScorerCode: setScorerCode, newCode: newCode,
+    adminCode: adminCode, setAdminCode: setAdminCode,
     setRole: setRole,
     onRole: onRole,
     userId: function () { return userId; },

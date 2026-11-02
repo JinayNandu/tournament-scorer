@@ -105,7 +105,7 @@
                        onclick: function () { api.go('home'); } } : null),
       el('div', { class: 'wrap stack' }, [
         el('div', { class: 'card stack-s', style: 'text-align:center' }, [
-          courtMark(),
+          sportMark(),
           el('h2', { text: 'What are you here for?' }),
           el('p', { class: 'muted', text:
             'Tap one. You can change it whenever you like.' })
@@ -129,12 +129,20 @@
                          : 'Nothing has been set up yet. Ask the organiser.');
           }),
 
+        /* Opening the key sheet is not the same as holding the key, so
+         * this screen does not move until the sheet says it worked. It
+         * used to go to the list first and leave anybody who shut the
+         * sheet again standing somewhere they had not asked to be. The
+         * render is only so the way back appears, now that tapping any
+         * of these counts as having been asked. */
         choice('run', 'I am running the tournament',
           'Create one, or take charge of one that is already here.',
           function () {
             setWelcomed();
-            api.go('home');
-            TS.extras.accessSheet(S, api, 'organiser');
+            api.render();
+            TS.extras.accessSheet(S, api, 'organiser', function () {
+              api.go('home');
+            });
           })
       ])
     ]);
@@ -149,9 +157,9 @@
       /* A viewer looking at an empty list is not being invited to start
        * something - they cannot - so the screen says what it is waiting
        * for instead of offering a button that would be refused. */
-      : TS.store.canEdit()
+      : TS.store.access().organiser
       ? el('div', { class: 'card stack welcome', style: 'text-align:center' }, [
-          courtMark(),
+          sportMark(),
           el('h2', { text: 'Start a tournament' }),
           el('p', { class: 'muted', text:
             'A name is all it needs. Teams, players and the games in a ' +
@@ -160,7 +168,7 @@
             onclick: function () { S.wizard = null; api.go('wizard'); } })
         ])
       : el('div', { class: 'card stack welcome', style: 'text-align:center' }, [
-          courtMark(),
+          sportMark(),
           el('h2', { text: 'Nothing on yet' }),
           el('p', { class: 'muted', text:
             'When the organiser starts a tournament it appears here, and ' +
@@ -181,7 +189,7 @@
        * other candidate and it collides with the Start a tournament
        * button sitting on the very screen it points at. */
       api.topbar('Tournaments', modeLine(S), [
-        S.tournaments.length ? U.adminOnly(el('button', {
+        S.tournaments.length ? U.organiserOnly(el('button', {
           class: 'btn btn-primary btn-sm', text: 'New',
           onclick: function () { S.wizard = null; api.go('wizard'); } })) : null
       ], { label: 'Home', onclick: function () { api.go('welcome'); } }),
@@ -252,33 +260,112 @@
   }
 
   /* The one screen with nothing on it is the first thing anybody sees, and
-   * it was three lines of grey text. A court in plan, drawn rather than
-   * fetched: it weighs nothing, it is sharp at any size, it recolours with
-   * the theme because it is stroked in currentColor, and it cannot go
-   * missing on hall wifi the way an image can. No sport has been chosen at
-   * this point, so the marking is the one every racket sport shares. */
-  function courtMark() {
+   * it was three lines of grey text. Playing surfaces in plan, drawn
+   * rather than fetched: they weigh nothing, they are sharp at any size,
+   * they recolour with the theme because every line is currentColor, and
+   * they cannot go missing on hall wifi the way an image can.
+   *
+   * There are five because this app is not a pickleball app. It started
+   * as one and a single court said so, which is the wrong promise to make
+   * to somebody who has come to score a cricket match - the engines have
+   * covered cricket and football since the day they were written. They
+   * cross-fade in place rather than sliding, so it reads as one mark
+   * changing its mind rather than a carousel demanding to be watched.
+   *
+   * All five share the 220x100 box, lying across rather than up the page:
+   * a card has width to spare and no height to spare. */
+  var GROUNDS = [
+    /* The marking every racket sport shares - net down the middle, the
+     * non-volley line either side, service boxes split behind those. */
+    [['rect', { x: 2, y: 2, width: 216, height: 96, rx: 1 }],
+     ['line', { x1: 110, y1: 2, x2: 110, y2: 98 }],
+     ['line', { x1: 75,  y1: 2, x2: 75,  y2: 98 }],
+     ['line', { x1: 145, y1: 2, x2: 145, y2: 98 }],
+     ['line', { x1: 2,   y1: 50, x2: 75,  y2: 50 }],
+     ['line', { x1: 145, y1: 50, x2: 218, y2: 50 }]],
+
+    /* Cricket: boundary, the thirty-yard circle, and the square in the
+     * middle with a crease at each end. */
+    [['ellipse', { cx: 110, cy: 50, rx: 108, ry: 48 }],
+     ['ellipse', { cx: 110, cy: 50, rx: 60,  ry: 28 }],
+     ['rect', { x: 101, y: 22, width: 18, height: 56 }],
+     ['line', { x1: 96, y1: 29, x2: 124, y2: 29 }],
+     ['line', { x1: 96, y1: 71, x2: 124, y2: 71 }]],
+
+    /* Football: halfway line, centre circle, penalty and six-yard boxes. */
+    [['rect', { x: 2, y: 2, width: 216, height: 96 }],
+     ['line', { x1: 110, y1: 2, x2: 110, y2: 98 }],
+     ['circle', { cx: 110, cy: 50, r: 19 }],
+     ['rect', { x: 2,   y: 22, width: 32, height: 56 }],
+     ['rect', { x: 186, y: 22, width: 32, height: 56 }],
+     ['rect', { x: 2,   y: 37, width: 12, height: 26 }],
+     ['rect', { x: 206, y: 37, width: 12, height: 26 }]],
+
+    /* Tennis: the doubles court outside, tramlines in, service boxes
+     * split by the centre line. */
+    [['rect', { x: 2, y: 2, width: 216, height: 96 }],
+     ['line', { x1: 2,   y1: 13, x2: 218, y2: 13 }],
+     ['line', { x1: 2,   y1: 87, x2: 218, y2: 87 }],
+     ['line', { x1: 110, y1: 2,  x2: 110, y2: 98 }],
+     ['line', { x1: 64,  y1: 13, x2: 64,  y2: 87 }],
+     ['line', { x1: 156, y1: 13, x2: 156, y2: 87 }],
+     ['line', { x1: 64,  y1: 50, x2: 156, y2: 50 }]],
+
+    /* Basketball: the two keys, each closed by its free-throw semicircle.
+     * Chord 38 against radius 19, so the arcs are true half circles. */
+    [['rect', { x: 2, y: 2, width: 216, height: 96 }],
+     ['line', { x1: 110, y1: 2, x2: 110, y2: 98 }],
+     ['circle', { cx: 110, cy: 50, r: 17 }],
+     ['rect', { x: 2,   y: 31, width: 42, height: 38 }],
+     ['rect', { x: 176, y: 31, width: 42, height: 38 }],
+     ['path', { d: 'M44 31 A 19 19 0 0 1 44 69' }],
+     ['path', { d: 'M176 31 A 19 19 0 0 0 176 69' }]]
+  ];
+
+  function groundSvg(parts) {
     var ns = 'http://www.w3.org/2000/svg';
     var svg = document.createElementNS(ns, 'svg');
     svg.setAttribute('viewBox', '0 0 220 100');
     svg.setAttribute('class', 'courtmark');
     svg.setAttribute('aria-hidden', 'true');
     svg.setAttribute('focusable', 'false');
-    /* Lying across rather than up the page: a card has width to spare and
-     * no height to spare. Net down the middle, the non-volley line either
-     * side of it, and the service boxes split behind those. */
-    [['rect', { x: 2, y: 2, width: 216, height: 96, rx: 1 }],
-     ['line', { x1: 110, y1: 2, x2: 110, y2: 98 }],
-     ['line', { x1: 75,  y1: 2, x2: 75,  y2: 98 }],
-     ['line', { x1: 145, y1: 2, x2: 145, y2: 98 }],
-     ['line', { x1: 2,   y1: 50, x2: 75,  y2: 50 }],
-     ['line', { x1: 145, y1: 50, x2: 218, y2: 50 }]
-    ].forEach(function (p) {
+    parts.forEach(function (p) {
       var n = document.createElementNS(ns, p[0]);
       Object.keys(p[1]).forEach(function (k) { n.setAttribute(k, p[1][k]); });
       svg.appendChild(n);
     });
     return svg;
+  }
+
+  function stillPlease() {
+    try {
+      return !!(window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    } catch (e) { return false; }
+  }
+
+  /* The timer dies with the screen it was drawn on. Nothing unmounts this
+   * explicitly - the router simply replaces the body - so it checks each
+   * time round whether it is still on the page and stops if it is not.
+   * Without that, every visit to the chooser would leave another one
+   * running for as long as the tab is open. */
+  function sportMark() {
+    var wrap = el('div', { class: 'marks' });
+    var svgs = GROUNDS.map(function (parts, i) {
+      var s = groundSvg(parts);
+      if (i === 0) s.setAttribute('class', 'courtmark on');
+      wrap.appendChild(s);
+      return s;
+    });
+    if (svgs.length < 2 || stillPlease()) return wrap;
+    var at = 0;
+    var timer = window.setInterval(function () {
+      if (!wrap.isConnected) { window.clearInterval(timer); return; }
+      svgs[at].setAttribute('class', 'courtmark');
+      at = (at + 1) % svgs.length;
+      svgs[at].setAttribute('class', 'courtmark on');
+    }, 3400);
+    return wrap;
   }
 
   function tournamentRow(t, S, api) {
@@ -381,13 +468,13 @@
   function moreMenu(S, api) {
     U.sheet(S.tournament.name, function (close) {
       return [el('div', { class: 'stack-s' }, [
-        U.adminOnly(el('button', { class: 'btn btn-block', text: 'Settings',
+        U.managerOnly(el('button', { class: 'btn btn-block', text: 'Settings',
           onclick: function () { close(); TS.settings.sheet(S, api); } })),
         el('button', { class: 'btn btn-block', text: 'Big screen',
           onclick: function () { close(); TS.extras.bigScreen(S, api); } }),
-        U.adminOnly(el('button', { class: 'btn btn-block', text: 'Backup',
+        U.managerOnly(el('button', { class: 'btn btn-block', text: 'Backup',
           onclick: function () { close(); TS.extras.dataSheet(S, api); } })),
-        el('button', { class: 'btn btn-block', text: 'Who can score',
+        el('button', { class: 'btn btn-block', text: 'Codes and access',
           onclick: function () { close(); TS.extras.accessSheet(S, api); } }),
         el('button', { class: 'btn btn-block', text: 'All tournaments',
           onclick: function () { close(); api.go('home'); } }),
@@ -409,10 +496,12 @@
   /* ---------------------------------------------------------- matches -- */
 
   function matchesTab(S, api) {
-    /* An empty screen invites the organiser to fill it and tells a viewer
-     * what it is waiting for. The same words cannot do both jobs. */
+    /* An empty screen invites whoever can fill it to do so, and tells
+     * everybody else what it is waiting for. The same words cannot do
+     * both jobs - and a scorer belongs with everybody else here, because
+     * the teams are not theirs to enter. */
     if (S.entrants.length < 2) {
-      if (!TS.store.canEdit()) {
+      if (!TS.store.canManage()) {
         return U.empty('The teams', 'They appear here once the organiser has entered them.');
       }
       return el('div', { class: 'card stack', style: 'text-align:center' }, [
@@ -425,7 +514,7 @@
     }
 
     if (!S.fixtures.length) {
-      if (!TS.store.canEdit()) {
+      if (!TS.store.canManage()) {
         return U.empty('The matches', 'They appear here as soon as the draw is made.');
       }
       return el('div', { class: 'card stack', style: 'text-align:center' }, [
@@ -498,14 +587,14 @@
                 : (M.kindLabel((names.length && (S.tournament.config.tieTemplate.rubbers[0] || {}).kind) || 'team')
                    || 'Scored as one game') })
         ]),
-        U.adminOnly(el('button', { class: 'btn btn-sm', text: 'Change',
+        U.managerOnly(el('button', { class: 'btn btn-sm', text: 'Change',
           onclick: function () {
             TS.matches.setupMeeting(S, api, S.fixtures[0]);
           } }))
       ])
     ]));
 
-    if (TS.store.canEdit()) {
+    if (TS.store.canManage()) {
       out.push(el('div', { class: 'row', style: 'margin-top:8px' }, [
         el('button', { class: 'btn',
           text: S.fixtures.length ? 'Edit the rounds' : 'Plan the rounds',
@@ -521,8 +610,9 @@
     });
 
     /* The whole block is about changing the shape of the tournament, so
-     * it is not something a viewer is shown a disabled version of. */
-    if (TS.store.canEdit()) out.push(endsInFinal
+     * it is not shown at all to anybody who cannot - a viewer or a
+     * scorer - rather than shown disabled. */
+    if (TS.store.canManage()) out.push(endsInFinal
       ? el('div', { class: 'card stack' }, [
           el('div', { class: 'eyebrow', text: 'The end' }),
           el('p', { class: 'small muted', text:
@@ -570,7 +660,7 @@
       el('div', { class: 'row' }, [
         el('div', { class: 'eyebrow', text: 'The groups' }),
         el('div', { class: 'spacer' }),
-        U.adminOnly(el('button', { class: 'btn btn-ghost btn-sm', text: 'Change',
+        U.managerOnly(el('button', { class: 'btn btn-ghost btn-sm', text: 'Change',
           onclick: function () { TS.matches.everyone(S, api); } }))
       ])
     ].concat(groups.map(function (g) {
@@ -942,7 +1032,7 @@
     } else if (!S.rubbers.length) {
       body.push(el('div', { class: 'card stack', style: 'text-align:center' }, [
         el('p', { class: 'muted', text: 'No games in this match yet.' }),
-        U.adminOnly(el('button', { class: 'btn btn-primary', text: 'Add a game',
+        U.managerOnly(el('button', { class: 'btn btn-primary', text: 'Add a game',
           onclick: function () { TS.matches.addToMeeting(S, api, f); } }))
       ]));
     } else {
@@ -955,8 +1045,10 @@
          * time somebody cannot make it. */
         el('button', { class: 'btn btn-primary', text: 'Who is playing',
           onclick: function () { TS.matches.whosPlaying(S, api, f, sides); } }),
-        el('button', { class: 'btn', text: 'Set up the games',
-          onclick: function () { TS.matches.setupMeeting(S, api, f); } }),
+        /* Who is on court changes every match and is a scorer's to fix;
+         * what the games ARE is the tournament's shape and is not. */
+        U.managerOnly(el('button', { class: 'btn', text: 'Set up the games',
+          onclick: function () { TS.matches.setupMeeting(S, api, f); } })),
         el('button', { class: 'btn btn-ghost btn-sm', text: '+ Add one more',
           onclick: function () { TS.matches.addToMeeting(S, api, f); } }),
         el('div', { class: 'spacer' }),

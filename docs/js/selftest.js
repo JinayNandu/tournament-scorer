@@ -2042,7 +2042,7 @@
 
       it('a scorer may score the one they were given', function () {
         eq(FS._roleOf({ uid: 'u1', organiser: false, scorerOf: { t1: true } }, 't1'),
-           'admin');
+           'scorer');
       });
 
       it('and NOT the one next door', function () {
@@ -2060,6 +2060,73 @@
 
       it('somebody with no code at all watches', function () {
         eq(FS._roleOf({ uid: 'u1', organiser: false, scorerOf: {} }, 't1'), 'viewer');
+      });
+
+      /* The admin code is the second tier, and the reason it exists is
+       * that eleven courtside scorers must not be able to reshape the
+       * tournament they are scoring. */
+      it('a tournament admin runs the one they were given', function () {
+        eq(FS._roleOf({ uid: 'u1', organiser: false,
+                        adminOf: { t1: true }, scorerOf: {} }, 't1'), 'admin');
+      });
+
+      it('and is a viewer of the one next door, like anybody else', function () {
+        eq(FS._roleOf({ uid: 'u1', organiser: false,
+                        adminOf: { t1: true }, scorerOf: {} }, 't2'), 'viewer');
+      });
+
+      it('and still cannot create a tournament', function () {
+        eq(FS._roleOf({ uid: 'u1', organiser: false,
+                        adminOf: { t1: true }, scorerOf: {} }, null), 'viewer',
+           'running one event is not a licence to start another - that is ' +
+           'the organiser key, and it is app-wide for exactly this reason');
+      });
+
+      it('holding both codes is admin, not an accidental demotion', function () {
+        eq(FS._roleOf({ uid: 'u1', organiser: false,
+                        adminOf: { t1: true }, scorerOf: { t1: true } }, 't1'),
+           'admin',
+           'the widest claim wins, or somebody who typed both codes ends ' +
+           'up with less than the one they typed first');
+      });
+
+      /* Tournaments made before there were two tiers have no admins
+       * collection, so the state object simply has no such key. */
+      it('a state with no adminOf at all still answers', function () {
+        eq(FS._roleOf({ uid: 'u1', organiser: false, scorerOf: { t1: true } }, 't1'),
+           'scorer');
+        eq(FS._roleOf({ uid: 'u1', organiser: true }, 't1'), 'admin');
+      });
+
+      /* The store refuses a scorer's write to the tournament DOCUMENT
+       * before it touches the local mirror, and it decides that from the
+       * shape of the path alone - the same cut the rules make on the
+       * server. Wrong in either direction it is silent: too tight and
+       * scoring stops, too loose and a scorer's phone spends the
+       * afternoon showing a tournament nobody else can see. */
+      it('the tournament document is what a scoring code cannot touch', function () {
+        var is = TS.store._isTournamentDoc;
+        eq(is('tournaments/t1'), true);
+        eq(is('tournaments/t_mvz9dt2b2b6bw'), true);
+      });
+
+      it('and everything beneath it is scoring, which a scorer may write', function () {
+        var is = TS.store._isTournamentDoc;
+        eq(is('tournaments/t1/fixtures/f1'), false);
+        eq(is('tournaments/t1/rubbers/r1'), false);
+        eq(is('tournaments/t1/leases/r1'), false,
+           'the lease is how two scorers share a court - refusing it ' +
+           'would break the very thing it exists to fix');
+        eq(is('tournaments/t1/access/code'), false,
+           'the code documents have a guard of their own; this one is ' +
+           'only about the shape of the tournament');
+      });
+
+      it('and the collection itself is not a document', function () {
+        var is = TS.store._isTournamentDoc;
+        eq(is('tournaments'), false);
+        eq(is(''), false);
+        eq(is(null), false);
       });
 
       /* A code gets read off one phone and typed into another across a
