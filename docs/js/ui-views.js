@@ -173,17 +173,18 @@
        * out says "< Tournaments" - and the app's name now belongs to the
        * screen in front of it.
        *
-       * "Menu" is a generic word and this app usually refuses them, the
-       * way it refused "Back". It is here because the destination
-       * genuinely is three choices on a screen, and no concrete name for
-       * that beat being understood instantly. "Start" was the other
-       * candidate and it collides with the Start a tournament button
-       * sitting on the very screen it points at. */
+       * "Home" names the front door, which is exactly what that screen
+       * is now - the first thing anybody lands on. It went out as "Menu"
+       * first and that was wrong for this app, which refuses generic
+       * chrome words the way it refused "Back": a menu is a thing an
+       * interface has, home is a place somebody goes. "Start" was the
+       * other candidate and it collides with the Start a tournament
+       * button sitting on the very screen it points at. */
       api.topbar('Tournaments', modeLine(S), [
         S.tournaments.length ? U.adminOnly(el('button', {
           class: 'btn btn-primary btn-sm', text: 'New',
           onclick: function () { S.wizard = null; api.go('wizard'); } })) : null
-      ], { label: 'Menu', onclick: function () { api.go('welcome'); } }),
+      ], { label: 'Home', onclick: function () { api.go('welcome'); } }),
       el('div', { class: 'wrap stack' }, [
         S.info.sharedFailed ? U.banner(
           'The shared backend is set up but did not answer, so scores are ' +

@@ -597,7 +597,7 @@ a screen that cannot remember the answer must not keep asking.
 Somebody who came to watch and is then handed a court has to be able to
 say so, and a question you can only answer once is a trap however
 politely it is worded. `welcome` is a route like any other: the list
-carries "< Menu" to it, it carries "< Tournaments" back, and from a
+carries "< Home" to it, it carries "< Tournaments" back, and from a
 match the same button in the same corner reaches it in two taps. The way
 back only appears once somebody HAS been past it, because a back button
 on the very first screen points at nothing they have seen.
@@ -605,10 +605,11 @@ on the very first screen points at nothing they have seen.
 **The list is called "Tournaments" now**, which is what every other
 screen had always called it - the hub's way out has said "< Tournaments"
 since it was built - and the app's name moved to the screen in front of
-it. "Menu" is a generic word and this app refuses them as a rule, the
-way it refused "Back"; it is here because the destination genuinely is
-three choices on a screen and no concrete name beat being understood
-instantly. "Start" was the other candidate and it collides with the
+it. The way back is labelled **"Home"**, which names the front door -
+exactly what that screen is now. It shipped once as "Menu" and that was
+wrong for this app, which refuses generic chrome words the way it
+refused "Back": a menu is a thing an interface has, home is a place
+somebody goes. "Start" was the other candidate and it collides with the
 Start a tournament button sitting on the screen it points at.
 
 **Each answer lands on the thing it names, not on a menu.** With one
