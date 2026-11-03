@@ -18,20 +18,27 @@
    * with a note underneath, which answers a question nobody asked and
    * leaves all three of them guessing. So it asks instead.
    *
-   * It is NOT a gate, and that distinction is the whole design. It opens
-   * BY ITSELF only where the app genuinely does not know yet - the
-   * tournament is shared, this phone cannot edit, and nobody has
-   * answered before. A scorer or an organiser is never stopped by it,
-   * because the role they already hold IS the answer.
+   * It is the FRONT DOOR: every open of the app lands here, whatever
+   * this phone did last time. It used to appear only where the app
+   * could not work the answer out for itself, which meant the one
+   * person it was written for - the organiser, who holds a key - was
+   * the one person who never saw it.
    *
-   * But it is a SCREEN, not a one-off. Somebody who came to watch and is
-   * then handed a court has to be able to say so, and a question you can
-   * only answer once is a trap however politely it is worded. So
-   * `welcome` is a route like any other: the list carries a back button
-   * to it and it carries one back to the list. Every button on it leads
-   * somewhere real, so there is nothing to dismiss either. */
+   * It is still not a gate. Every button leads somewhere real, so
+   * there is nothing to dismiss, and anybody who has been past it once
+   * gets "Tournaments" in the corner to go straight through. Nor is it
+   * a question you only get asked once: somebody who came to watch and
+   * is then handed a court has to be able to say so, so `welcome` is a
+   * route like any other and the list carries a button back to it.
+   *
+   * What it must never become is a toll. Whoever already holds the
+   * thing an answer would ask for is taken straight where they are
+   * going, rather than being shown the sheet they have already filled
+   * in - see the organiser branch below. */
   var WELCOME_KEY = 'ts1:welcomed';
 
+  /* "Has this phone been past here before", which is now only about
+   * whether to offer the way straight through. */
   function welcomed() {
     try { return window.localStorage.getItem(WELCOME_KEY) === '1'; }
     catch (e) { return true; }   // no storage: never stand in the way
@@ -39,14 +46,6 @@
 
   function setWelcomed() {
     try { window.localStorage.setItem(WELCOME_KEY, '1'); } catch (e) {}
-  }
-
-  function needsWelcome(S) {
-    if (S.loading || welcomed()) return false;
-    var a = TS.store.access();
-    /* On a lone device there is nobody else and no role to pick, and the
-     * empty screen already says "start a tournament". */
-    return a.shared && !a.canEdit;
   }
 
   function choiceIcon(kind) {
@@ -91,6 +90,18 @@
   function welcomeScreen(S, api) {
     var many = S.tournaments.length;
     var only = many === 1 ? S.tournaments[0] : null;
+    /* `organiser` is the ONLY role worth reading here, and `canEdit` is
+     * a trap: it starts at admin and stays there until a tournament is
+     * opened, so on this screen it would say yes to a complete
+     * stranger. `organiser` is settled at sign-in instead, against the
+     * database. `codes` is what tells a key apart from no key at all -
+     * the other two backends have nobody to keep out and nothing to
+     * type, so there is no sheet worth opening on either. */
+    var a = TS.store.access();
+    /* The list lands a moment after this screen does, so for that
+     * moment "nothing has started yet" is a lie. Say the ordinary
+     * thing until the store has actually answered. */
+    var anything = S.loading || many > 0;
 
     function openOnly(tab) {
       S.stageId = null;
@@ -112,21 +123,34 @@
         ]),
 
         choice('watch', 'Watch the scores',
-          many ? 'Every match as it is played. Nothing to set up.'
-               : 'Nothing has started yet, but this is where it will appear.',
+          anything ? 'Every match as it is played. Nothing to set up.'
+                   : 'Nothing has started yet, but this is where it will appear.',
           function () {
             setWelcomed();
             if (only) openOnly(); else api.go('home');
           }),
 
         choice('score', 'I am scoring a match',
-          'You will need the short code from whoever is organising.',
+          !a.organiser ? 'You will need the short code from whoever is organising.'
+          : a.codes ? 'Open the match you are scoring. You hold the key, so ' +
+                      'there is no code to type.'
+          : 'Open the match you are scoring.',
           function () {
             setWelcomed();
-            if (only) { openOnly(); TS.extras.accessSheet(S, api); return; }
+            /* Asking an organiser for a code they do not need, and
+             * could not type anyway, is the toll this screen must not
+             * become. */
+            if (only) {
+              openOnly();
+              if (!a.organiser) TS.extras.accessSheet(S, api);
+              return;
+            }
             api.go('home');
-            U.toast(many ? 'Open the tournament you are scoring, then tap "I am scoring".'
-                         : 'Nothing has been set up yet. Ask the organiser.');
+            U.toast(many
+              ? 'Open the tournament you are scoring, then tap "I am scoring".'
+              : a.organiser
+              ? 'Nothing has been set up yet. Start one and the games follow.'
+              : 'Nothing has been set up yet. Ask the organiser.');
           }),
 
         /* Opening the key sheet is not the same as holding the key, so
@@ -136,9 +160,19 @@
          * render is only so the way back appears, now that tapping any
          * of these counts as having been asked. */
         choice('run', 'I am running the tournament',
-          'Create one, or take charge of one that is already here.',
+          !a.organiser ? 'Create one, or take charge of one that is already here.'
+          : a.codes ? 'Your key is already on this phone. Carry on where you were.'
+          : 'Start one, or carry on with one that is already here.',
           function () {
             setWelcomed();
+            /* Somebody who already holds the key is not asked for it
+             * again. They now see this screen every single time the app
+             * opens, and a sheet to shut on each of those visits is
+             * exactly the toll the comment at the top refuses. */
+            if (a.organiser) {
+              if (only) openOnly(); else api.go('home');
+              return;
+            }
             api.render();
             TS.extras.accessSheet(S, api, 'organiser', function () {
               api.go('home');
@@ -149,7 +183,6 @@
   }
 
   function home(S, api) {
-    if (needsWelcome(S)) return welcomeScreen(S, api);
     var list = S.tournaments.length
       ? el('div', { class: 'stack-s' }, S.tournaments.map(function (t) {
           return tournamentRow(t, S, api);

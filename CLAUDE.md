@@ -605,13 +605,35 @@ which answers a question nobody asked and leaves all three guessing - so
 it asks instead: Watch the scores / I am scoring a match / I am running
 the tournament, one line of explanation each.
 
-**It is not a gate, and that distinction is the whole design.** It opens
-BY ITSELF only where the app genuinely does not know - the tournament is
-shared, this phone cannot edit, and nobody has answered before
-(`ts1:welcomed`). A scorer or an organiser is never stopped by it,
-because the role they already hold IS the answer, and on a lone device
-there is no role to pick. If storage throws, `welcomed()` returns TRUE -
-a screen that cannot remember the answer must not keep asking.
+**IT IS THE FRONT DOOR: every open of the app lands on it.** `S.screen`
+starts at `welcome`, not `home`. It used to appear only where the app
+could not work the answer out for itself - shared, this phone cannot
+edit, nobody has answered before - which meant the one person it was
+written for, the organiser holding a key, was the one person who never
+saw it. Nothing decides any more; `needsWelcome` is gone.
+
+**It is still not a gate, and that distinction is the whole design.**
+Every button leads somewhere real, so there is nothing to dismiss, and
+`ts1:welcomed` now says only whether this phone has been past here
+before - which decides whether "Tournaments" is offered in the corner as
+the way straight through, and nothing else. If storage throws,
+`welcomed()` returns TRUE: a screen that cannot remember must offer the
+way out rather than withhold it.
+
+**What it must never become is a toll.** It is now in front of somebody
+who opens this app forty times on a Saturday, so whoever already holds
+what an answer would ask for is taken straight where they are going
+instead of being shown a sheet they have already filled in: an organiser
+tapping "I am running the tournament" lands in the tournament, not on
+the key.
+
+**`organiser` is the only role this screen may read, and `canEdit` is a
+trap here.** The role starts at admin and stays there until a tournament
+is opened - the "assume admin" rule - so on the chooser, where none is
+open, `canEdit` says yes to a complete stranger. `organiser` is settled
+at sign-in against the database instead. `codes` then tells a key apart
+from no key at all, because the other two backends have nobody to keep
+out and nothing to type.
 
 **Dismissing a sheet is not an answer, so it must not move anybody.**
 The chooser's "I am running the tournament" used to go to the list and
@@ -644,7 +666,8 @@ tournament - which is the normal case for an event - Watch opens it
 directly, so the link is one tap from the scores; I am scoring opens it
 AND the code sheet, ready to type; I am running opens the organiser key.
 Routing a choice to another list would be the same fault one screen
-further on.
+further on. Both sheets are skipped for anybody who already holds the
+key, per the toll rule above.
 
 The same went for the others. An empty state names its space and says
 when it fills - "Standings / The table fills in as matches are played" -

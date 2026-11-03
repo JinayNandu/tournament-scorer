@@ -11,7 +11,10 @@
   var U = TS.ui, M = TS.model;
 
   var S = {
-    screen: 'home',
+    /* THE CHOOSER IS THE FRONT DOOR, every time the app is opened.
+     * Not the list: three people open this link wanting three
+     * different things, and the list answers only one of them. */
+    screen: 'welcome',
     booted: false,
     info: { mode: 'local', role: 'admin', canEdit: true },
     pending: 0,
@@ -188,7 +191,10 @@
         return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
       });
       S.loading = false;
-      if (S.screen === 'home') render();
+      /* The chooser reads the list too - how many tournaments there
+       * are decides where each answer lands - so it repaints when the
+       * list arrives, exactly as the list itself does. */
+      if (S.screen === 'home' || S.screen === 'welcome') render();
     }));
   }
 
